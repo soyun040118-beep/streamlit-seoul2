@@ -66,3 +66,21 @@ if st.button("🎲 동물 뽑기 버튼 (Pick an Animal!)", key="animal_pick_btn
     
 st.markdown("---")
 
+import streamlit as st
+import pandas as pd
+import numpy as np
+
+all_users=["Alice","Bob","Charly"]
+with st.container(border=True):
+        users=st.multiselect("Users",all_users,default=all_users)
+        rolling_average=st.toggle("Rolling aveage")
+
+np.random.seed(42)
+data=pd.DataFrame(np.random.randn(20,len(users)),columns=users)
+if rolling_average:
+    data=data.rolling(7).mean().dropna()
+
+tab1, tab2=st.tabs(["Chart","Dataframe"])
+tab1.line_chart(data,height=250)
+tab2.dataframe(data,height=250,use_container_width=True)
+
