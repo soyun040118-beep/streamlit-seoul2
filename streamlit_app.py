@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import random
 import numpy as np
 
 # --- 데이터 로드 함수 ---
@@ -36,28 +37,28 @@ def get_grammar_data():
 
 # --- 퀴즈 데이터 로드 함수 ---
 def get_quiz_data():
-    """오류 유형별로 다양한 퀴즈 문제를 생성하고 DataFrame으로 반환합니다."""
+    """오류 유형별로 다양한 객관식 퀴즈 문제를 생성하고 DataFrame으로 반환합니다."""
     quiz_data = [
         # 데/대
-        {'오류 유형': '데/대', '틀린 문장': '그 영화 정말 재미있데.', '맞는 문장': '그 영화 정말 재미있대.'},
-        {'오류 유형': '데/대', '틀린 문장': '그 시험 엄청 어렵데.', '맞는 문장': '그 시험 엄청 어렵대.'}, # 맞는 경우
-        {'오류 유형': '데/대', '틀린 문장': '선생님이 내일 소풍 간데.', '맞는 문장': '선생님이 내일 소풍 간대.'},
+        {'오류 유형': '데/대', '문제': '그 영화 정말 재미있[데/대].', '정답': '그 영화 정말 재미있대.', '오답들': ['그 영화 정말 재미있데.']},
+        {'오류 유형': '데/대', '문제': '어제 가 보니 정말 좋[데/대].', '정답': '어제 가 보니 정말 좋데.', '오답들': ['어제 가 보니 정말 좋대.']},
+        {'오류 유형': '데/대', '문제': '친구가 오늘 시험이[데/대].', '정답': '친구가 오늘 시험이래.', '오답들': ['친구가 오늘 시험이레.']},
         # 에요/예요
-        {'오류 유형': '에요/예요', '틀린 문장': '이건 제 책예요.', '맞는 문장': '이건 제 책이에요.'},
-        {'오류 유형': '에요/예요', '틀린 문장': '아니예요. 괜찮아요.', '맞는 문장': '아니에요. 괜찮아요.'},
-        {'오류 유형': '에요/예요', '틀린 문장': '저 사람이 바로 범인이예요.', '맞는 문장': '저 사람이 바로 범인이에요.'}, # 맞는 경우
+        {'오류 유형': '에요/예요', '문제': '이건 제 책[이에요/예요].', '정답': '이건 제 책이에요.', '오답들': ['이건 제 책예요.']},
+        {'오류 유형': '에요/예요', '문제': '아니[에요/예요]. 괜찮아요.', '정답': '아니에요. 괜찮아요.', '오답들': ['아니예요. 괜찮아요.']},
+        {'오류 유형': '에요/예요', '문제': '이 사과는 얼마[에요/예요]?', '정답': '이 사과는 얼마예요?', '오답들': ['이 사과는 얼마에요?']},
         # 어떡해/어떻게
-        {'오류 유형': '어떡해/어떻게', '틀린 문장': '이 문제를 어떡해 풀지?', '맞는 문장': '이 문제를 어떻게 풀지?'},
-        {'오류 유형': '어떡해/어떻게', '틀린 문장': '지갑을 잃어버렸어. 어떻게!', '맞는 문장': '지갑을 잃어버렸어. 어떡해!'},
-        {'오류 유형': '어떡해/어떻게', '틀린 문장': '너 집에 어떡해 가?', '맞는 문장': '너 집에 어떻게 가?'},
+        {'오류 유형': '어떡해/어떻게', '문제': '이 문제를 [어떡해/어떻게] 풀지?', '정답': '이 문제를 어떻게 풀지?', '오답들': ['이 문제를 어떡해 풀지?']},
+        {'오류 유형': '어떡해/어떻게', '문제': '지갑을 잃어버렸어. [어떡해/어떻게]!', '정답': '지갑을 잃어버렸어. 어떡해!', '오답들': ['지갑을 잃어버렸어. 어떻게!']},
+        {'오류 유형': '어떡해/어떻게', '문제': '너 집에 [어떡해/어떻게] 가?', '정답': '너 집에 어떻게 가?', '오답들': ['너 집에 어떡해 가?']},
         # 되/돼
-        {'오류 유형': '되/돼', '틀린 문장': '그러면 안되.', '맞는 문장': '그러면 안돼.'},
-        {'오류 유형': '되/돼', '틀린 문장': '이제 가도 돼나요?', '맞는 문장': '이제 가도 되나요?'},
-        {'오류 유형': '되/돼', '틀린 문장': '의사가 돼고 싶어요.', '맞는 문장': '의사가 되고 싶어요.'},
+        {'오류 유형': '되/돼', '문제': '그러면 안 [되/돼].', '정답': '그러면 안 돼.', '오답들': ['그러면 안 되.']},
+        {'오류 유형': '되/돼', '문제': '이제 가도 [되/돼]나요?', '정답': '이제 가도 되나요?', '오답들': ['이제 가도 돼나요?']},
+        {'오류 유형': '되/돼', '문제': '의사가 [되/돼]고 싶어요.', '정답': '의사가 되고 싶어요.', '오답들': ['의사가 돼고 싶어요.']},
         # 안/않
-        {'오류 유형': '안/않', '틀린 문장': '너는 나한테 미안하지도 안니?', '맞는 문장': '너는 나한테 미안하지도 않니?'},
-        {'오류 유형': '안/않', '틀린 문장': '숙제를 아직 않했다.', '맞는 문장': '숙제를 아직 안했다.'},
-        {'오류 유형': '안/않', '틀린 문장': '그렇게 하면 않돼.', '맞는 문장': '그렇게 하면 안돼.'},
+        {'오류 유형': '안/않', '문제': '너는 나한테 미안하지도 [안/않]니?', '정답': '너는 나한테 미안하지도 않니?', '오답들': ['너는 나한테 미안하지도 안니?']},
+        {'오류 유형': '안/않', '문제': '숙제를 아직 [안/않] 했다.', '정답': '숙제를 아직 안 했다.', '오답들': ['숙제를 아직 않 했다.']},
+        {'오류 유형': '안/않', '문제': '그렇게 하면 [안/않]돼.', '정답': '그렇게 하면 안돼.', '오답들': ['그렇게 하면 않돼.']},
     ]
     return pd.DataFrame(quiz_data)
 
@@ -75,8 +76,14 @@ if 'grammar_df' not in st.session_state:
     # 퀴즈 기록을 위한 session_state 초기화
     if 'quiz_history' not in st.session_state:
         st.session_state.quiz_history = []
+    if 'incorrect_questions' not in st.session_state:
+        st.session_state.incorrect_questions = []
     if 'current_question' not in st.session_state:
         st.session_state.current_question = None
+    if 'retry_mode' not in st.session_state:
+        st.session_state.retry_mode = False
+    if 'current_retry_index' not in st.session_state:
+        st.session_state.current_retry_index = 0
 
 # --- 2. 문법 오류 차트 및 데이터프레임 탭 ---
 st.markdown("---")
@@ -201,19 +208,45 @@ with col_right:
 st.markdown("---")
 st.subheader("📝 나의 문법 실력 최종 점검! (퀴즈)")
 
-def generate_question():
-    """랜덤으로 문제를 생성하고 session_state에 저장합니다."""
-    # 퀴즈 데이터에서 문제를 샘플링
-    question = st.session_state.quiz_df.sample(1).iloc[0]
-    # 해당 문제의 규칙 정보를 메인 데이터에서 찾아 병합
-    rule_info = st.session_state.grammar_df[st.session_state.grammar_df['오류 유형'] == question['오류 유형']].iloc[0]
-    st.session_state.current_question = pd.concat([question, rule_info.drop('오류 유형')])
+def generate_question(retry=False):
+    """퀴즈 문제를 생성합니다. retry 모드에서는 오답 목록에서 문제를 가져옵니다."""
+    if retry:
+        # 오답 목록에서 None이 아닌 다음 문제를 찾음
+        while st.session_state.current_retry_index < len(st.session_state.incorrect_questions) and st.session_state.incorrect_questions[st.session_state.current_retry_index] is None:
+            st.session_state.current_retry_index += 1
 
+        if st.session_state.current_retry_index < len(st.session_state.incorrect_questions):
+            question = st.session_state.incorrect_questions[st.session_state.current_retry_index]
+            st.session_state.current_question = question
+        else: # 모든 오답 문제를 다 푼 경우
+            st.success("🎉 축하합니다! 모든 오답을 정복했어요!")
+            st.session_state.retry_mode = False
+            st.session_state.current_question = None
+            st.session_state.current_retry_index = 0
+            st.session_state.incorrect_questions = [] # 오답 목록 초기화
+    else:
+        # 일반 퀴즈 모드: 퀴즈 데이터에서 문제 샘플링
+        quiz_question_series = st.session_state.quiz_df.sample(1).iloc[0]
+        rule_info_series = st.session_state.grammar_df[st.session_state.grammar_df['오류 유형'] == quiz_question_series['오류 유형']].iloc[0]
+        
+        question_data = quiz_question_series.to_dict()
+        question_data['규칙 설명'] = rule_info_series['규칙 설명']
+        st.session_state.current_question = question_data
+
+# 퀴즈 모드에 따라 제목 변경
+quiz_title = "오답 다시 풀어보기" if st.session_state.retry_mode else "나의 문법 실력 최종 점검! (퀴즈)"
 with st.container(border=True):
-    st.write("아래 '퀴즈 시작!' 버튼을 눌러 나의 문법 실력을 테스트해 보세요. 틀린 문장을 올바르게 고쳐 입력하면 됩니다.")
+    st.write("아래 '퀴즈 시작!' 버튼을 눌러 나의 문법 실력을 테스트해 보세요. 올바른 문장을 선택하면 됩니다.")
 
     if st.button("🎲 퀴즈 시작! (또는 다음 문제)", use_container_width=True):
-        generate_question()
+        # 오답 모드가 아니거나, 오답이 없을 때만 일반 퀴즈 시작
+        if not any(q is not None for q in st.session_state.incorrect_questions):
+            st.session_state.retry_mode = False
+
+        if st.session_state.retry_mode:
+            st.session_state.current_retry_index += 1
+
+        generate_question(st.session_state.retry_mode)
         # 이전 답변 결과 메시지 초기화
         if 'answer_feedback' in st.session_state:
             del st.session_state.answer_feedback
@@ -221,22 +254,36 @@ with st.container(border=True):
     # 문제가 생성되었을 경우 퀴즈 UI 표시
     if st.session_state.current_question is not None:
         question_data = st.session_state.current_question
-        st.markdown(f"**문제:** 다음 문장을 올바르게 고쳐보세요.")
-        st.info(f"#### {question_data['틀린 문장']}")
+        st.markdown(f"**문제:** 다음 중 문법적으로 올바른 문장을 고르세요.")
+        st.info(f"#### {question_data['문제']}")
 
         with st.form(key="quiz_form"):
-            user_answer = st.text_input("정답 입력:", placeholder="여기에 정답을 입력하세요.")
+            # 선택지 생성 및 섞기
+            options = question_data['오답들'] + [question_data['정답']]
+            random.shuffle(options)
+            
+            user_answer = st.radio("선택지:", options, index=None, key=f"quiz_{question_data['문제']}")
             submit_button = st.form_submit_button("정답 제출")
 
             if submit_button:
-                correct_answer = question_data['예시 (맞는 문장)']
-                # 간단한 정답 비교 (공백, 마침표 제거)
-                if user_answer.strip().replace('.', '') == correct_answer.strip().replace('.', ''):
-                    st.session_state.answer_feedback = "correct"
+                if user_answer is None:
+                    st.warning("답을 선택해 주세요!")
                 else:
-                    st.session_state.answer_feedback = "incorrect"
-                    # 오답 기록
-                    st.session_state.quiz_history.append(question_data['오류 유형'])
+                    is_correct = (user_answer == question_data['정답'])
+
+                    if is_correct:
+                        st.session_state.answer_feedback = "correct"
+                        # 오답 모드에서 정답을 맞히면 해당 문제 제거
+                        if st.session_state.retry_mode:
+                            st.session_state.incorrect_questions[st.session_state.current_retry_index] = None
+                    else:
+                        st.session_state.answer_feedback = "incorrect"
+                        # 오답 기록
+                        st.session_state.quiz_history.append(question_data['오류 유형'])
+                        # 중복되지 않게 오답 목록에 추가
+                        is_duplicate = any(q is not None and q['문제'] == question_data['문제'] for q in st.session_state.incorrect_questions)
+                        if not is_duplicate and not st.session_state.retry_mode:
+                            st.session_state.incorrect_questions.append(question_data)
 
         # 정답 제출 후 피드백 표시
         if 'answer_feedback' in st.session_state:
@@ -245,7 +292,7 @@ with st.container(border=True):
                 st.balloons()
             elif st.session_state.answer_feedback == "incorrect":
                 question_data = st.session_state.current_question
-                st.error(f"아쉬워요, 정답은 **'{question_data['예시 (맞는 문장)']}'** 입니다.")
+                st.error(f"아쉬워요, 정답은 **'{question_data['정답']}'** 입니다.")
                 with st.expander("🔍 왜 틀렸을까요? (규칙 확인)"):
                     st.write(f"**오류 유형:** {question_data['오류 유형']}")
                     st.write(f"**규칙:** {question_data['규칙 설명']}")
@@ -277,3 +324,29 @@ if st.session_state.quiz_history:
                 st.write(f"**예시:** '{rule_info['예시 (틀린 문장)']}' ➡️ '{rule_info['예시 (맞는 문장)']}'")
             else:
                 st.write("아직 기록된 오답이 없습니다.")
+
+# --- 7. 오답 노트 및 다시 풀기 기능 ---
+if any(q is not None for q in st.session_state.get('incorrect_questions', [])):
+    st.markdown("---")
+    st.subheader("📓 나의 오답 노트")
+
+    with st.container(border=True):
+        st.write("아래는 퀴즈에서 틀렸던 문제들이에요. '오답 다시 풀어보기' 버튼을 눌러 모두 정복해 보세요!")
+
+        # 오답 목록 표시
+        for i, q in enumerate(st.session_state.incorrect_questions):
+            if q is None: # 이미 맞힌 문제는 건너뛰기
+                continue
+            st.markdown(f"**{i+1}. [{q['오류 유형']}]** {q['문제']}")
+
+        if st.button("✍️ 오답 다시 풀어보기", type="primary", use_container_width=True):
+            st.session_state.retry_mode = True
+            st.session_state.current_retry_index = 0
+            generate_question(retry=True)
+            # 피드백 초기화 및 페이지 새로고침
+            if 'answer_feedback' in st.session_state:
+                del st.session_state.answer_feedback
+            st.rerun()
+
+        if st.session_state.retry_mode:
+            st.info("오답 퀴즈 모드가 활성화되었습니다. 상단의 퀴즈 섹션에서 문제를 풀어주세요.")
