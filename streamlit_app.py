@@ -34,6 +34,33 @@ def get_grammar_data():
     df['ID'] = range(1, len(df) + 1)
     return df
 
+# --- 퀴즈 데이터 로드 함수 ---
+def get_quiz_data():
+    """오류 유형별로 다양한 퀴즈 문제를 생성하고 DataFrame으로 반환합니다."""
+    quiz_data = [
+        # 띄어쓰기
+        {'오류 유형': '띄어쓰기', '틀린 문장': '아버지가방에들어가신다.', '맞는 문장': '아버지가 방에 들어가신다.'},
+        {'오류 유형': '띄어쓰기', '틀린 문장': '나오늘학교에갔다.', '맞는 문장': '나 오늘 학교에 갔다.'},
+        {'오류 유형': '띄어쓰기', '틀린 문장': '이꽃은정말예쁘다.', '맞는 문장': '이 꽃은 정말 예쁘다.'},
+        # 받침 오류
+        {'오류 유형': '받침 오류', '틀린 문장': '꼬치 이쁘다.', '맞는 문장': '꽃이 예쁘다.'},
+        {'오류 유형': '받침 오류', '틀린 문장': '부억에서 요리를 했다.', '맞는 문장': '부엌에서 요리를 했다.'},
+        {'오류 유형': '받침 오류', '틀린 문장': '김치를 담갔다.', '맞는 문장': '김치를 담갔다.'}, # '담궜다'가 흔한 오류
+        # 조사 오류
+        {'오류 유형': '조사 오류', '틀린 문장': '나은 사과를 먹었다.', '맞는 문장': '나는 사과를 먹었다.'},
+        {'오류 유형': '조사 오류', '틀린 문장': '사과과 맛있다.', '맞는 문장': '사과가 맛있다.'},
+        {'오류 유형': '조사 오류', '틀린 문장': '학교애 가다.', '맞는 문장': '학교에 가다.'},
+        # 되/돼
+        {'오류 유형': '되/돼', '틀린 문장': '그러면 안되.', '맞는 문장': '그러면 안돼.'},
+        {'오류 유형': '되/돼', '틀린 문장': '이제 가도 되나요?', '맞는 문장': '이제 가도 되나요?'}, # 맞는 경우도 문제로
+        {'오류 유형': '되/돼', '틀린 문장': '의사가 되고 싶어요.', '맞는 문장': '의사가 되고 싶어요.'},
+        # 안/않
+        {'오류 유형': '안/않', '틀린 문장': '너는 나한테 미안하지도 안니?', '맞는 문장': '너는 나한테 미안하지도 않니?'},
+        {'오류 유형': '안/않', '틀린 문장': '숙제를 아직 안 했다.', '맞는 문장': '숙제를 아직 안 했다.'}, # 맞는 경우도 문제로
+        {'오류 유형': '안/않', '틀린 문장': '그렇게 하면 않돼.', '맞는 문장': '그렇게 하면 안돼.'},
+    ]
+    return pd.DataFrame(quiz_data)
+
 # --- 1. 앱 기본 설정 및 세션 상태 초기화 ---
 st.set_page_config(layout="wide")
 st.title("👨‍🏫 초등 문법 교정 마스터 봇 🤖")
@@ -44,6 +71,7 @@ if 'grammar_df' not in st.session_state:
     df = get_grammar_data()
     df['확인 여부'] = False  # '확인 여부' 초기값 설정
     st.session_state.grammar_df = df
+    st.session_state.quiz_df = get_quiz_data() # 퀴즈 데이터 로드
     # 퀴즈 기록을 위한 session_state 초기화
     if 'quiz_history' not in st.session_state:
         st.session_state.quiz_history = []
@@ -175,7 +203,11 @@ st.subheader("📝 나의 문법 실력 최종 점검! (퀴즈)")
 
 def generate_question():
     """랜덤으로 문제를 생성하고 session_state에 저장합니다."""
-    st.session_state.current_question = st.session_state.grammar_df.sample(1).iloc[0]
+    # 퀴즈 데이터에서 문제를 샘플링
+    question = st.session_state.quiz_df.sample(1).iloc[0]
+    # 해당 문제의 규칙 정보를 메인 데이터에서 찾아 병합
+    rule_info = st.session_state.grammar_df[st.session_state.grammar_df['오류 유형'] == question['오류 유형']].iloc[0]
+    st.session_state.current_question = pd.concat([question, rule_info.drop('오류 유형')])
 
 with st.container(border=True):
     st.write("아래 '퀴즈 시작!' 버튼을 눌러 나의 문법 실력을 테스트해 보세요. 틀린 문장을 올바르게 고쳐 입력하면 됩니다.")
@@ -190,7 +222,7 @@ with st.container(border=True):
     if st.session_state.current_question is not None:
         question_data = st.session_state.current_question
         st.markdown(f"**문제:** 다음 문장을 올바르게 고쳐보세요.")
-        st.info(f"#### {question_data['예시 (틀린 문장)']}")
+        st.info(f"#### {question_data['틀린 문장']}")
 
         with st.form(key="quiz_form"):
             user_answer = st.text_input("정답 입력:", placeholder="여기에 정답을 입력하세요.")
@@ -198,7 +230,7 @@ with st.container(border=True):
 
             if submit_button:
                 correct_answer = question_data['예시 (맞는 문장)']
-                # 간단한 정답 비교 (공백 제거)
+                # 간단한 정답 비교 (공백, 마침표 제거)
                 if user_answer.strip() == correct_answer.strip():
                     st.session_state.answer_feedback = "correct"
                 else:
