@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 import random
+import os
+from dotenv import load_dotenv
 import numpy as np
 
 # --- 데이터 로드 함수 ---
@@ -62,6 +64,10 @@ def get_quiz_data():
     ]
     return pd.DataFrame(quiz_data)
 
+# --- 환경 변수 로드 ---
+load_dotenv()
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+
 # --- 1. 앱 기본 설정 및 세션 상태 초기화 ---
 st.set_page_config(layout="wide")
 
@@ -69,6 +75,13 @@ st.set_page_config(layout="wide")
 with st.sidebar:
     st.image("https://i.imgur.com/4sGo6va.png", width=150)
     st.info("안녕하세요! 저는 맞춤법 요정 '맞춤이'에요. 함께 즐겁게 문법을 배워봐요! ✨")
+    
+    # API 키 로드 상태 표시
+    st.markdown("---")
+    if GOOGLE_API_KEY and GOOGLE_API_KEY != "여기에 실제 구글 API 키를 입력하세요":
+        st.success("API 키가 준비됐어요! 🤖")
+    else:
+        st.warning("API 키가 필요해요! 🔑")
 
 col1, col2 = st.columns([0.8, 0.2])
 with col1:
