@@ -44,6 +44,11 @@ if 'grammar_df' not in st.session_state:
     df = get_grammar_data()
     df['확인 여부'] = False  # '확인 여부' 초기값 설정
     st.session_state.grammar_df = df
+    # 퀴즈 기록을 위한 session_state 초기화
+    if 'quiz_history' not in st.session_state:
+        st.session_state.quiz_history = []
+    if 'current_question' not in st.session_state:
+        st.session_state.current_question = None
 
 # --- 2. 문법 오류 차트 및 데이터프레임 탭 ---
 st.markdown("---")
@@ -163,3 +168,80 @@ with col_right:
         st.info("다음 규칙들을 정복해 봐요. 조금만 더 힘내세요!")
     else:
         st.warning("아직 확인한 규칙이 없네요. 위에 있는 체크박스를 눌러 학습을 시작해 보세요!")
+
+# --- 5. 문법 퀴즈 및 오답 분석 ---
+st.markdown("---")
+st.subheader("📝 나의 문법 실력 최종 점검! (퀴즈)")
+
+def generate_question():
+    """랜덤으로 문제를 생성하고 session_state에 저장합니다."""
+    st.session_state.current_question = st.session_state.grammar_df.sample(1).iloc[0]
+
+with st.container(border=True):
+    st.write("아래 '퀴즈 시작!' 버튼을 눌러 나의 문법 실력을 테스트해 보세요. 틀린 문장을 올바르게 고쳐 입력하면 됩니다.")
+
+    if st.button("🎲 퀴즈 시작! (또는 다음 문제)", use_container_width=True):
+        generate_question()
+        # 이전 답변 결과 메시지 초기화
+        if 'answer_feedback' in st.session_state:
+            del st.session_state.answer_feedback
+
+    # 문제가 생성되었을 경우 퀴즈 UI 표시
+    if st.session_state.current_question is not None:
+        question_data = st.session_state.current_question
+        st.markdown(f"**문제:** 다음 문장을 올바르게 고쳐보세요.")
+        st.info(f"#### {question_data['예시 (틀린 문장)']}")
+
+        with st.form(key="quiz_form"):
+            user_answer = st.text_input("정답 입력:", placeholder="여기에 정답을 입력하세요.")
+            submit_button = st.form_submit_button("정답 제출")
+
+            if submit_button:
+                correct_answer = question_data['예시 (맞는 문장)']
+                # 간단한 정답 비교 (공백 제거)
+                if user_answer.strip() == correct_answer.strip():
+                    st.session_state.answer_feedback = "correct"
+                else:
+                    st.session_state.answer_feedback = "incorrect"
+                    # 오답 기록
+                    st.session_state.quiz_history.append(question_data['오류 유형'])
+
+        # 정답 제출 후 피드백 표시
+        if 'answer_feedback' in st.session_state:
+            if st.session_state.answer_feedback == "correct":
+                st.success("🎉 정답입니다! 정말 잘했어요!")
+                st.balloons()
+            elif st.session_state.answer_feedback == "incorrect":
+                question_data = st.session_state.current_question
+                st.error(f"아쉬워요, 정답은 **'{question_data['예시 (맞는 문장)']}'** 입니다.")
+                with st.expander("🔍 왜 틀렸을까요? (규칙 확인)"):
+                    st.write(f"**오류 유형:** {question_data['오류 유형']}")
+                    st.write(f"**규칙:** {question_data['규칙 설명']}")
+
+# --- 6. 오답 유형 분석 및 추천 ---
+if st.session_state.quiz_history:
+    st.markdown("---")
+    st.subheader("📈 나의 오답 유형 분석")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        with st.container(border=True):
+            st.markdown("##### 📊 오답 유형 분포")
+            incorrect_df = pd.DataFrame(st.session_state.quiz_history, columns=['오류 유형'])
+            chart_data = incorrect_df['오류 유형'].value_counts()
+            st.bar_chart(chart_data, color="#FF4B4B")
+
+    with col2:
+        with st.container(border=True):
+            st.markdown("##### 💡 가장 많이 틀린 유형 다시보기")
+            if not chart_data.empty:
+                most_common_error = chart_data.index[0]
+                st.warning(f"**'{most_common_error}'** 유형을 가장 많이 틀렸어요. 아래 규칙을 다시 한번 확인해 보세요!")
+
+                # 해당 규칙 정보 가져오기
+                rule_info = st.session_state.grammar_df[st.session_state.grammar_df['오류 유형'] == most_common_error].iloc[0]
+                st.info(f"**규칙:** {rule_info['규칙 설명']}")
+                st.write(f"**예시:** '{rule_info['예시 (틀린 문장)']}' ➡️ '{rule_info['예시 (맞는 문장)']}'")
+            else:
+                st.write("아직 기록된 오답이 없습니다.")
