@@ -64,8 +64,18 @@ def get_quiz_data():
 
 # --- 1. 앱 기본 설정 및 세션 상태 초기화 ---
 st.set_page_config(layout="wide")
-st.title("👨‍🏫 초등 문법 교정 마스터 봇 🤖")
-st.write("초등학생들이 자주 틀리는 문법 실수들을 모아봤어요. 규칙을 익히고 **✅ 확인 여부**를 체크하며 문법 실력을 완성해 보세요!")
+
+# --- 사이드바 마스코트 ---
+with st.sidebar:
+    st.image("https://i.imgur.com/4sGo6va.png", width=150)
+    st.info("안녕하세요! 저는 맞춤법 요정 '맞춤이'에요. 함께 즐겁게 문법을 배워봐요! ✨")
+
+col1, col2 = st.columns([0.8, 0.2])
+with col1:
+    st.title("👨‍🏫 알쏭달쏭 문법 교실 🤖")
+    st.write("초등학생들이 자주 헷갈리는 문법들을 모았어요. 규칙을 익히고 퀴즈를 풀며 문법 실력을 키워봐요!")
+with col2:
+    st.image("https://i.imgur.com/VpA2pT4.png", width=150)
 
 # 세션 상태(session_state)에 데이터가 없으면 초기화
 if 'grammar_df' not in st.session_state:
@@ -87,8 +97,8 @@ if 'grammar_df' not in st.session_state:
 
 # --- 2. 문법 오류 차트 및 데이터프레임 탭 ---
 st.markdown("---")
-st.subheader("📊 학생들이 자주 틀리는 문법 오류 빈도")
-st.write("가장 많은 학생들이 실수하는 유형을 차트로 확인해 보세요.")
+st.subheader("📊 친구들이 가장 많이 헷갈려요!")
+st.write("어떤 문법을 가장 많이 틀리는지 차트로 확인하고, 중요한 규칙부터 공부해 보세요.")
 
 tab1, tab2 = st.tabs(["오류 빈도 차트", "규칙 전체 보기"])
 
@@ -110,7 +120,7 @@ with tab2:
 
 # --- 3. 문법 확인 및 체크 기능 (Data Editor) ---
 st.markdown("---")
-st.subheader("✅ 나의 문법 실력 점검하기")
+st.subheader("✅ 꼼꼼히 확인하고 레벨 업!")
 
 with st.container(border=True):
     all_error_types = st.session_state.grammar_df['오류 유형'].unique().tolist()
@@ -175,7 +185,7 @@ with st.container(border=True):
 
 # --- 4. 학습 진행 상황 요약 ---
 st.markdown("---")
-st.subheader("✨ 나의 학습 진행 상황")
+st.subheader("✨ 나의 학습 리포트")
 
 # 전체 데이터 기준으로 진행 상황 계산
 total_df = st.session_state.grammar_df
@@ -183,20 +193,21 @@ completed_count = total_df['확인 여부'].sum()
 total_count = len(total_df)
 progress_ratio = completed_count / total_count if total_count > 0 else 0
 
-col_left, col_right = st.columns([1, 2])
+with st.container(border=True):
+    col1, col2 = st.columns([1, 2])
 
-with col_left:
-    delta_text = f"{progress_ratio * 100:.0f}% 완료"
-    st.metric(
-        label="완료된 규칙 수",
-        value=f"{completed_count} / {total_count}개",
-        delta=delta_text if progress_ratio < 1 else "성공! 🎉"
-    )
+    with col1:
+        delta_text = f"{progress_ratio * 100:.0f}% 완료"
+        st.metric(
+            label="나의 학습 점수",
+            value=f"{completed_count * 20} 점",
+            delta=f"{completed_count} / {total_count}개 확인!" if progress_ratio < 1 else "만점! 🎉"
+        )
 
-with col_right:
-    st.progress(progress_ratio, text=f"규칙 학습 진행률: {progress_ratio * 100:.0f}%")
+    with col2:
+        st.progress(progress_ratio, text=f"규칙 학습 진행률: {progress_ratio * 100:.0f}%")
 
-    if progress_ratio == 1.0 and total_count > 0:
+    if progress_ratio == 1.0:
         st.balloons()
         st.success("🎉 축하합니다! 모든 규칙을 마스터했어요!")
     elif progress_ratio > 0:
@@ -206,7 +217,7 @@ with col_right:
 
 # --- 5. 문법 퀴즈 및 오답 분석 ---
 st.markdown("---")
-st.subheader("📝 나의 문법 실력 최종 점검! (퀴즈)")
+st.subheader("📝 도전! 문법 퀴즈")
 
 def generate_question(retry=False):
     """퀴즈 문제를 생성합니다. retry 모드에서는 오답 목록에서 문제를 가져옵니다."""
@@ -236,9 +247,9 @@ def generate_question(retry=False):
 # 퀴즈 모드에 따라 제목 변경
 quiz_title = "오답 다시 풀어보기" if st.session_state.retry_mode else "나의 문법 실력 최종 점검! (퀴즈)"
 with st.container(border=True):
-    st.write("아래 '퀴즈 시작!' 버튼을 눌러 나의 문법 실력을 테스트해 보세요. 올바른 문장을 선택하면 됩니다.")
+    st.write("아래 버튼을 눌러 나의 문법 실력을 테스트해 보세요. 올바른 문장을 선택하면 됩니다.")
 
-    if st.button("🎲 퀴즈 시작! (또는 다음 문제)", use_container_width=True):
+    if st.button("🎲 새로운 퀴즈 풀기!", use_container_width=True):
         # 오답 모드가 아니거나, 오답이 없을 때만 일반 퀴즈 시작
         if not any(q is not None for q in st.session_state.incorrect_questions):
             st.session_state.retry_mode = False
@@ -300,7 +311,7 @@ with st.container(border=True):
 # --- 6. 오답 유형 분석 및 추천 ---
 if st.session_state.quiz_history:
     st.markdown("---")
-    st.subheader("📈 나의 오답 유형 분석")
+    st.subheader("📈 나의 약점 분석!")
 
     col1, col2 = st.columns(2)
 
@@ -328,10 +339,10 @@ if st.session_state.quiz_history:
 # --- 7. 오답 노트 및 다시 풀기 기능 ---
 if any(q is not None for q in st.session_state.get('incorrect_questions', [])):
     st.markdown("---")
-    st.subheader("📓 나의 오답 노트")
+    st.subheader("📓 나만의 비밀 오답 노트")
 
     with st.container(border=True):
-        st.write("아래는 퀴즈에서 틀렸던 문제들이에요. '오답 다시 풀어보기' 버튼을 눌러 모두 정복해 보세요!")
+        st.write("퀴즈에서 틀렸던 문제들이에요. '오답 정복하기' 버튼을 눌러 다시 풀어봐요!")
 
         # 오답 목록 표시
         for i, q in enumerate(st.session_state.incorrect_questions):
@@ -339,7 +350,7 @@ if any(q is not None for q in st.session_state.get('incorrect_questions', [])):
                 continue
             st.markdown(f"**{i+1}. [{q['오류 유형']}]** {q['문제']}")
 
-        if st.button("✍️ 오답 다시 풀어보기", type="primary", use_container_width=True):
+        if st.button("✍️ 오답 정복하기!", type="primary", use_container_width=True):
             st.session_state.retry_mode = True
             st.session_state.current_retry_index = 0
             generate_question(retry=True)
