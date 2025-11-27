@@ -82,11 +82,8 @@ with st.sidebar:
     else:
         st.warning("API 키가 필요해요! 🔑")
 
-col1, col2 = st.columns([0.8, 0.2])
-with col1:
-    st.title("👨‍🏫 알쏭달쏭 문법 교실 🤖")
-    st.write("초등학생들이 자주 헷갈리는 문법들을 모았어요. 규칙을 익히고 퀴즈를 풀며 문법 실력을 키워봐요!")
-with col2:
+st.title("👨‍🏫 알쏭달쏭 문법 교실 🤖")
+st.write("초등학생들이 자주 헷갈리는 문법들을 모았어요. 규칙을 익히고 퀴즈를 풀며 문법 실력을 키워봐요!")
 
 # 세션 상태(session_state)에 데이터가 없으면 초기화
 if 'grammar_df' not in st.session_state:
