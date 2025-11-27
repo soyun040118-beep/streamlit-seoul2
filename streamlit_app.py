@@ -137,7 +137,7 @@ with tab1:
 
 with tab2:
     st.dataframe(
-        st.session_state.grammar_df.drop(columns=['확인 여부', 'ID']).set_index('오류 유형'),
+        st.session_state.grammar_df.drop(columns=['ID']).set_index('오류 유형'),
         use_container_width=True
     )
 
