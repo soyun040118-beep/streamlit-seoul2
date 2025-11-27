@@ -26,21 +26,14 @@ if submitted and user_input.strip():
             "contents": [
                 {
                     "parts": [
-                        {"text": user_input.strip()},
+                        {"text": user_input.strip()}
                     ]
                 }
-            ],
-            # API 안정성을 위해 generationConfig와 safetySettings를 추가합니다.
-            "generationConfig": {},
-            "safetySettings": [],
+            ]
         }
-        headers = {
-            "Content-Type": "application/json",
-        }
-        # API 키를 쿼리 파라미터로 전달합니다.
         params = {"key": API_KEY}
         try:
-            response = requests.post(API_URL, params=params, headers=headers, json=payload, timeout=30)
+            response = requests.post(API_URL, params=params, json=payload, timeout=30)
             response.raise_for_status()
             data = response.json()
             text = data["candidates"][0]["content"]["parts"][0]["text"]

@@ -11,9 +11,9 @@ def get_grammar_data():
     data = {
         '오류 유형': ['데/대', '에요/예요', '어떡해/어떻게', '되/돼', '안/않'],
         '규칙 설명': [
-            '데/대는 의미가 비슷한 다른 말을 정확히 구분해서 사용해요.',
+            "'데'는 직접 경험한 사실을, '대'는 다른 사람에게 들은 내용을 전달할 때 사용해요.",
             '앞에 오는 단어에 받침이 있으면 **이에요**, 받침이 없으면 **예요**를 붙여요.',
-            '"어떻게"는 "어떠하게"의 준말이고 "어떡해"는 어떻게 하여서의 준말입니다.',
+            "'어떻게'는 '어떠하게'의 준말로 방법을 물을 때 쓰고, '어떡해'는 '어떻게 해'의 준말로 걱정되는 상황에서 사용해요.",
             "'되어'의 준말이 '돼'예요. '되어'를 넣어 말이 되면 '돼'를 쓸 수 있어요.",
             "'아니'의 준말이 '안'이에요. '아니하다'의 준말은 '않다'고요."
         ],
@@ -42,9 +42,9 @@ def get_quiz_data():
     """오류 유형별로 다양한 객관식 퀴즈 문제를 생성하고 DataFrame으로 반환합니다."""
     quiz_data = [
         # 데/대
-        {'오류 유형': '데/대', '문제': '그 영화 정말 재미있[데/대].', '정답': '그 영화 정말 재미있대.', '오답들': ['그 영화 정말 재미있데.']},
-        {'오류 유형': '데/대', '문제': '어제 가 보니 정말 좋[데/대].', '정답': '어제 가 보니 정말 좋데.', '오답들': ['어제 가 보니 정말 좋대.']},
-        {'오류 유형': '데/대', '문제': '친구가 오늘 시험이[데/대].', '정답': '친구가 오늘 시험이래.', '오답들': ['친구가 오늘 시험이레.']},
+        {'오류 유형': '데/대', '문제': '그 영화 정말 재미있[데/대]. (남에게 들음)', '정답': '그 영화 정말 재미있대.', '오답들': ['그 영화 정말 재미있데.']},
+        {'오류 유형': '데/대', '문제': '어제 가 보니 정말 좋[데/대]. (직접 경험)', '정답': '어제 가 보니 정말 좋데.', '오답들': ['어제 가 보니 정말 좋대.']},
+        {'오류 유형': '데/대', '문제': '친구가 오늘 시험이[래/레].', '정답': '친구가 오늘 시험이래.', '오답들': ['친구가 오늘 시험이레.']},
         # 에요/예요
         {'오류 유형': '에요/예요', '문제': '이건 제 책[이에요/예요].', '정답': '이건 제 책이에요.', '오답들': ['이건 제 책예요.']},
         {'오류 유형': '에요/예요', '문제': '아니[에요/예요]. 괜찮아요.', '정답': '아니에요. 괜찮아요.', '오답들': ['아니예요. 괜찮아요.']},
@@ -73,7 +73,7 @@ st.set_page_config(layout="wide")
 
 # --- 사이드바 마스코트 ---
 with st.sidebar:
-    st.image("https://i.imgur.com/4sGo6va.png", width=150)
+    st.image("images/mascot.png", width=150)
     st.info("안녕하세요! 저는 맞춤법 요정 '맞춤이'에요. 함께 즐겁게 문법을 배워봐요! ✨")
     
     # API 키 로드 상태 표시
@@ -88,14 +88,24 @@ with col1:
     st.title("👨‍🏫 알쏭달쏭 문법 교실 🤖")
     st.write("초등학생들이 자주 헷갈리는 문법들을 모았어요. 규칙을 익히고 퀴즈를 풀며 문법 실력을 키워봐요!")
 with col2:
-    st.image("https://i.imgur.com/VpA2pT4.png", width=150)
+    st.image("images/header_image.png", width=150)
 
 # 세션 상태(session_state)에 데이터가 없으면 초기화
 if 'grammar_df' not in st.session_state:
-    df = get_grammar_data()
-    df['확인 여부'] = False  # '확인 여부' 초기값 설정
-    st.session_state.grammar_df = df
+    st.session_state.grammar_df = get_grammar_data()
     st.session_state.quiz_df = get_quiz_data() # 퀴즈 데이터 로드
+
+    # 레벨업 퀴즈 상태 초기화
+    levelup_quiz = []
+    for error_type in st.session_state.grammar_df['오류 유형']:
+        # 각 오류 유형별로 퀴즈 데이터에서 하나의 문제를 선택
+        question = st.session_state.quiz_df[st.session_state.quiz_df['오류 유형'] == error_type].sample(1).iloc[0].to_dict()
+        question['user_answer'] = None
+        question['correct'] = False
+        levelup_quiz.append(question)
+    st.session_state.levelup_quiz = levelup_quiz
+    st.session_state.levelup_submitted = False
+
     # 퀴즈 기록을 위한 session_state 초기화
     if 'quiz_history' not in st.session_state:
         st.session_state.quiz_history = []
@@ -130,103 +140,6 @@ with tab2:
         st.session_state.grammar_df.drop(columns=['확인 여부', 'ID']).set_index('오류 유형'),
         use_container_width=True
     )
-
-# --- 3. 문법 확인 및 체크 기능 (Data Editor) ---
-st.markdown("---")
-st.subheader("✅ 꼼꼼히 확인하고 레벨 업!")
-
-with st.container(border=True):
-    all_error_types = st.session_state.grammar_df['오류 유형'].unique().tolist()
-
-    # 필터링 UI
-    col1, col2 = st.columns([0.8, 0.2])
-    with col1:
-        selected_types = st.multiselect(
-            "필터링: 내가 궁금한 오류 유형을 선택해 보세요.",
-            all_error_types,
-            default=all_error_types,
-            label_visibility="collapsed"
-        )
-    with col2:
-        # '모두 선택/해제' 버튼 로직
-        if st.button('모두 선택', use_container_width=True):
-            selected_types = all_error_types
-        if st.button('모두 해제', use_container_width=True):
-            selected_types = []
-
-    # 선택된 타입으로 데이터 필터링
-    filtered_df = st.session_state.grammar_df[st.session_state.grammar_df['오류 유형'].isin(selected_types)]
-    st.write(f"**선택된 규칙: {len(filtered_df)}개**")
-
-    # Data Editor 설정
-    config = {
-        "확인 여부": st.column_config.CheckboxColumn(
-            "✅ 확인했어요!",
-            help="이 규칙을 완벽하게 이해했으면 체크하세요.",
-            default=False,
-        ),
-        "빈도 (가상)": st.column_config.ProgressColumn(
-            "⚠️ 오류 빈도",
-            help="학생들이 자주 틀리는 정도 (높을수록 중요!)",
-            format="%d",
-            min_value=0,
-            max_value=50, # 최대값을 데이터에 맞게 조정
-            width="small"
-        ),
-        "오류 유형": st.column_config.TextColumn(width="small"),
-        "ID": None # ID 컬럼 숨기기
-    }
-
-    # data_editor를 사용하여 데이터 수정
-    st.markdown("##### ✏️ 규칙을 읽고 이해했으면 체크박스를 눌러보세요!")
-    edited_df = st.data_editor(
-        filtered_df,
-        column_config=config,
-        hide_index=True,
-        use_container_width=True,
-        height=350,
-        key="grammar_editor" # 위젯에 고유 key 부여
-    )
-
-    # 변경된 내용을 session_state에 다시 업데이트
-    # 사용자가 data_editor에서 체크박스를 변경하면, 그 내용(edited_df)을 원본(st.session_state.grammar_df)에 반영
-    for index, row in edited_df.iterrows():
-        original_index = st.session_state.grammar_df[st.session_state.grammar_df['ID'] == row['ID']].index
-        if not original_index.empty:
-            st.session_state.grammar_df.loc[original_index, '확인 여부'] = row['확인 여부']
-
-
-# --- 4. 학습 진행 상황 요약 ---
-st.markdown("---")
-st.subheader("✨ 나의 학습 리포트")
-
-# 전체 데이터 기준으로 진행 상황 계산
-total_df = st.session_state.grammar_df
-completed_count = total_df['확인 여부'].sum()
-total_count = len(total_df)
-progress_ratio = completed_count / total_count if total_count > 0 else 0
-
-with st.container(border=True):
-    col1, col2 = st.columns([1, 2])
-
-    with col1:
-        delta_text = f"{progress_ratio * 100:.0f}% 완료"
-        st.metric(
-            label="나의 학습 점수",
-            value=f"{completed_count * 20} 점",
-            delta=f"{completed_count} / {total_count}개 확인!" if progress_ratio < 1 else "만점! 🎉"
-        )
-
-    with col2:
-        st.progress(progress_ratio, text=f"규칙 학습 진행률: {progress_ratio * 100:.0f}%")
-
-    if progress_ratio == 1.0:
-        st.balloons()
-        st.success("🎉 축하합니다! 모든 규칙을 마스터했어요!")
-    elif progress_ratio > 0:
-        st.info("다음 규칙들을 정복해 봐요. 조금만 더 힘내세요!")
-    else:
-        st.warning("아직 확인한 규칙이 없네요. 위에 있는 체크박스를 눌러 학습을 시작해 보세요!")
 
 # --- 5. 문법 퀴즈 및 오답 분석 ---
 st.markdown("---")
@@ -374,3 +287,92 @@ if any(q is not None for q in st.session_state.get('incorrect_questions', [])):
 
         if st.session_state.retry_mode:
             st.info("오답 퀴즈 모드가 활성화되었습니다. 상단의 퀴즈 섹션에서 문제를 풀어주세요.")
+
+# --- 3. (구) -> (신) 꼼꼼히 확인하고 레벨 업! (위치 이동 및 기능 변경) ---
+st.markdown("---")
+st.subheader("✅ 꼼꼼히 확인하고 레벨 업!")
+st.info("각 문법 규칙을 잘 이해했는지 확인 퀴즈를 통해 점검해 보세요. 모든 문제를 맞혀야 학습 진도율 100%를 달성할 수 있어요!")
+
+with st.form("levelup_quiz_form"):
+    for i, q in enumerate(st.session_state.levelup_quiz):
+        st.markdown(f"**Q{i+1}. [{q['오류 유형']}] 유형 확인 문제**")
+        
+        # 규칙 설명 Expander
+        with st.expander("🤔 관련 규칙 보기"):
+            rule_info = st.session_state.grammar_df[st.session_state.grammar_df['오류 유형'] == q['오류 유형']].iloc[0]
+            st.write(f"**규칙:** {rule_info['규칙 설명']}")
+            st.write(f"**예시:** '{rule_info['예시 (틀린 문장)']}' ➡️ '{rule_info['예시 (맞는 문장)']}'")
+
+        # 선택지 생성 및 섞기
+        options = q['오답들'] + [q['정답']]
+        random.shuffle(options)
+        
+        user_answer = st.radio(
+            f"다음 중 올바른 문장을 고르세요: **{q['문제']}**",
+            options,
+            index=None,
+            key=f"levelup_{i}"
+        )
+        st.session_state.levelup_quiz[i]['user_answer'] = user_answer
+
+    levelup_submitted = st.form_submit_button("모두 풀었어요! 정답 제출하기", type="primary", use_container_width=True)
+
+    if levelup_submitted:
+        st.session_state.levelup_submitted = True
+        # 채점
+        all_correct = True
+        for q in st.session_state.levelup_quiz:
+            if q['user_answer'] == q['정답']:
+                q['correct'] = True
+            else:
+                q['correct'] = False
+                all_correct = False
+        
+        if all_correct:
+            st.balloons()
+            st.success("### 💯 완벽해요! 모든 확인 문제를 맞혔습니다!")
+        else:
+            st.warning("### 아쉬워요! 틀린 문제가 있어요. 아래 채점표를 보고 다시 도전해 보세요!")
+
+# 레벨업 퀴즈 제출 후 결과 표시
+if st.session_state.levelup_submitted:
+    st.markdown("##### 📝 레벨업 퀴즈 채점표")
+    results_data = []
+    for q in st.session_state.levelup_quiz:
+        results_data.append({
+            "유형": q['오류 유형'],
+            "문제": q['문제'],
+            "나의 답변": q['user_answer'] if q['user_answer'] is not None else "미선택",
+            "결과": "✅" if q['correct'] else "❌"
+        })
+    st.dataframe(results_data, use_container_width=True, hide_index=True)
+
+
+# --- 4. (구) -> (신) 나의 학습 리포트 (위치 이동 및 로직 변경) ---
+st.markdown("---")
+st.subheader("✨ 나의 학습 리포트")
+
+# 레벨업 퀴즈 기반으로 진행 상황 계산
+completed_count = sum(1 for q in st.session_state.levelup_quiz if q['correct'])
+total_count = len(st.session_state.levelup_quiz)
+progress_ratio = completed_count / total_count if total_count > 0 else 0
+
+with st.container(border=True):
+    col1, col2 = st.columns([1, 2])
+
+    with col1:
+        st.metric(
+            label="나의 학습 점수",
+            value=f"{completed_count * (100 // total_count)} 점",
+            delta=f"{completed_count} / {total_count}개 정답!" if progress_ratio < 1 else "만점! 🎉"
+        )
+
+    with col2:
+        st.progress(progress_ratio, text=f"규칙 학습 진행률: {progress_ratio * 100:.0f}%")
+
+    if not st.session_state.levelup_submitted:
+        st.warning("아직 확인 퀴즈를 풀지 않았어요. '레벨 업' 섹션에서 퀴즈를 풀고 학습 리포트를 확인해 보세요!")
+    elif progress_ratio == 1.0:
+        st.success("🎉 축하합니다! 모든 규칙을 마스터했어요!")
+    else:
+        st.info("틀린 문제를 다시 확인하고 재도전해서 100점을 만들어봐요! 파이팅!")
