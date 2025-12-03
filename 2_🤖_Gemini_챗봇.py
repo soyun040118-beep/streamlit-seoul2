@@ -1,54 +1,43 @@
 import os
 import json
+import logging
 import requests
 import streamlit as st
 from dotenv import load_dotenv
 
 # API 키 로드 (Streamlit Cloud와 로컬 환경 모두 지원)
-# Streamlit Cloud에서는 st.secrets를 사용, 로컬에서는 .env 파일 사용
-try:
-    # Streamlit Cloud의 secrets에서 먼저 시도
+def load_api_key():
+    """Streamlit secrets, .env 파일, 환경 변수 순으로 API 키를 로드합니다."""
+    # 1. Streamlit secrets에서 로드
     if hasattr(st, 'secrets') and 'GOOGLE_API_KEY' in st.secrets:
-        API_KEY = st.secrets['GOOGLE_API_KEY']
-    else:
-        # 로컬 환경: .env 파일에서 환경 변수 로드
-        env_paths = []
-        try:
-            # 현재 파일의 디렉토리
-            env_paths.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env'))
-        except:
-            pass
+        return st.secrets['GOOGLE_API_KEY']
+    
+    # 2. .env 파일에서 로드
+    load_dotenv()
+    
+    # 3. 환경 변수에서 로드
+    return os.getenv("GOOGLE_API_KEY")
 
-        # 현재 작업 디렉토리
-        env_paths.append('.env')
-        env_paths.append(os.path.join(os.getcwd(), '.env'))
+API_KEY = load_api_key()
 
-        # .env 파일 찾아서 로드
-        loaded = False
-        for env_path in env_paths:
-            if os.path.exists(env_path):
-                load_dotenv(env_path, override=True)
-                loaded = True
-                break
-
-        # 모든 경로에서 찾지 못한 경우 기본 로드 시도
-        if not loaded:
-            load_dotenv()
-        
-        API_KEY = os.getenv("GOOGLE_API_KEY")
-except:
-    # 폴백: 환경 변수에서 직접 가져오기
-    API_KEY = os.getenv("GOOGLE_API_KEY")
+# 상수 정의
+BASE_API_URL = "https://generativelanguage.googleapis.com"
+API_VERSIONS_TO_TRY = ["v1beta", "v1"]
 
 # 사용 가능한 모델 목록을 동적으로 가져오기
 def get_available_models():
     """사용 가능한 모델 목록을 가져옵니다."""
+    if not API_KEY:
+        st.error("앗! 구글 API 키가 설정되지 않았어요. .env 파일을 확인해주세요.")
+        st.stop()
+        return []
+
     available_models = []
     
     # v1beta API로 모델 목록 조회 시도
-    for api_version in ["v1beta", "v1"]:
+    for api_version in API_VERSIONS_TO_TRY:
         try:
-            list_url = f"https://generativelanguage.googleapis.com/{api_version}/models?key={API_KEY}"
+            list_url = f"{BASE_API_URL}/{api_version}/models?key={API_KEY}"
             response = requests.get(list_url, timeout=10)
             if response.status_code == 200:
                 data = response.json()
@@ -63,8 +52,10 @@ def get_available_models():
                                 short_name = model_name.split("/")[-1]
                                 available_models.append((api_version, short_name))
                     if available_models:
-                        break
-        except:
+                        return available_models # 성공 시 즉시 반환
+        except requests.exceptions.RequestException as e:
+            # 네트워크 관련 오류 발생 시 다음 버전 시도
+            st.warning(f"모델 목록 조회 중 오류 발생 ({api_version}): {e}")
             continue
     
     # 모델 목록을 가져오지 못한 경우 기본 모델 사용
@@ -74,7 +65,7 @@ def get_available_models():
             ("v1", "gemini-pro"),
         ]
     
-    return available_models
+    return list(dict.fromkeys(available_models)) # 중복 제거 후 반환
 
 # 세션 상태에 모델 목록 저장 (한 번만 조회)
 if 'available_models' not in st.session_state:
@@ -94,6 +85,14 @@ else:
 st.set_page_config(page_title="Gemini 문법 교정 챗봇", page_icon="🤖")
 st.title("🤖 문법 교정 챗봇")
 
+# 페르소나 정의
+SYSTEM_PROMPT = (
+    "너는 문법을 완벽하게 마스터한 똑똑한 초등학생이야. "
+    "사용자의 질문에 대해, 맞춤법과 문법을 친절하고 상세하게 설명해줘. "
+    "항상 밝고 명랑한 초등학생 말투를 사용해줘. 예를 들어, '~했어!', '~야!', '~거든!' 같은 말투를 사용해봐."
+)
+
+
 # 사이드바에 '새 대화 시작' 버튼 추가
 with st.sidebar:
     st.title("메뉴")
@@ -111,13 +110,13 @@ if not API_KEY or API_KEY == "여기에 실제 구글 API 키를 입력하세요
 def stream_gemini_response(payload):
     """Gemini API로부터 스트리밍 응답을 받아 텍스트 청크를 yield합니다."""
     last_error = None
+    error_details = ""
     for api_version, model_name in API_CONFIGS:
         # 스트리밍을 지원하는 streamGenerateContent 엔드포인트 사용
-        api_url = f"https://generativelanguage.googleapis.com/{api_version}/models/{model_name}:streamGenerateContent"
+        api_url = f"{BASE_API_URL}/{api_version}/models/{model_name}:streamGenerateContent"
         params = {"key": API_KEY, "alt": "sse"}
         
         try:
-            # stream=True로 요청을 보내고, 응답을 순회합니다.
             with requests.post(api_url, params=params, headers={"Content-Type": "application/json"}, json=payload, stream=True, timeout=60) as response:
                 response.raise_for_status()
                 for chunk in response.iter_lines():
@@ -135,17 +134,21 @@ def stream_gemini_response(payload):
                 return # 성공적으로 스트리밍이 끝나면 함수 종료
         except requests.exceptions.HTTPError as e:
             last_error = e
+            error_details = f"모델: {model_name}, 상태 코드: {e.response.status_code}"
+            logging.warning(f"HTTP 오류 발생: {error_details}, 응답: {e.response.text}")
             if e.response.status_code == 404:
                 continue # 404 오류 시 다음 모델 시도
             else:
                 break # 다른 HTTP 오류는 즉시 중단
         except Exception as exc:
             last_error = exc
+            error_details = str(exc)
+            logging.error(f"예상치 못한 오류 발생: {error_details}")
             break
     
     # 모든 시도가 실패한 경우
     if last_error:
-        yield f"Gemini를 호출하는 데 실패했어요: {last_error}"
+        yield f"앗, Gemini를 호출하는 데 실패했어. 잠시 후 다시 시도해줄래? (오류: {error_details})"
 
 
 # 세션 상태에 대화 기록 초기화
@@ -173,25 +176,17 @@ if prompt := st.chat_input("맞춤법이나 문법이 궁금한 문장을 입력
                 role = "model" if msg["role"] == "assistant" else "user"
                 conversation_history.append({"role": role, "parts": [{"text": msg["content"]}]})
 
-            # 마지막 사용자 메시지 앞에 페르소나 프롬프트 추가
-            # 참고: Gemini는 공식적인 'system' 역할이 없으므로, 대화의 일부로 컨텍스트를 제공합니다.
-            system_prompt = (
-                "너는 문법을 완벽하게 마스터한 똑똑한 초등학생이야. "
-                "사용자의 질문에 대해, 맞춤법과 문법을 친절하고 상세하게 설명해줘. "
-                "항상 밝고 명랑한 초등학생 말투를 사용해줘. 예를 들어, '~했어!', '~야!', '~거든!' 같은 말투를 사용해봐."
-            )
-            
             # API 요청 페이로드 구성
             payload = {
-                "contents": [
-                    {"role": "user", "parts": [{"text": system_prompt}]},
-                    {"role": "model", "parts": [{"text": "응, 알겠어! 이제부터 나는 문법을 마스터한 초등학생이야! 뭐든지 물어봐!"}]},
-                    *conversation_history
-                ],
+                "contents": conversation_history,
+                "system_instruction": {
+                    "parts": [{"text": SYSTEM_PROMPT}]
+                },
                 "generationConfig": {
                     "temperature": 0.7,
                     "topP": 1,
                     "topK": 1,
+                    "maxOutputTokens": 2048,
                 },
                 "safetySettings": [
                     {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
@@ -205,7 +200,7 @@ if prompt := st.chat_input("맞춤법이나 문법이 궁금한 문장을 입력
                 # 스트리밍 응답을 화면에 표시하고 전체 응답을 저장
                 response_stream = stream_gemini_response(payload)
                 full_response = st.write_stream(response_stream)
-                
+
                 # 성공적으로 응답을 받으면 대화 기록에 추가
                 if full_response:
                      st.session_state.messages.append({"role": "assistant", "content": full_response})
@@ -218,12 +213,3 @@ if prompt := st.chat_input("맞춤법이나 문법이 궁금한 문장을 입력
                 st.error(error_message)
                 # 실패한 경우, 마지막 사용자 메시지를 기록에서 제거하여 재시도할 수 있도록 함
                 st.session_state.messages.pop()
-            else:
-                # 스트림에서 아무것도 반환되지 않은 경우 (오류는 스트림 내에서 처리됨)
-                st.error("앗, 응답을 생성하지 못했어. 다시 시도해줄래?")
-                st.session_state.messages.pop() # 실패한 사용자 메시지 제거
-        except Exception as e:
-            error_message = f"스트리밍 중 오류가 발생했어요: {e}"
-            st.error(error_message)
-            # 실패한 경우, 마지막 사용자 메시지를 기록에서 제거하여 재시도할 수 있도록 함
-            st.session_state.messages.pop()
