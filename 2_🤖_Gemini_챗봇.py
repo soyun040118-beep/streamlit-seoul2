@@ -1,4 +1,6 @@
 import os
+import json
+import json
 import requests
 import streamlit as st
 from dotenv import load_dotenv
@@ -55,8 +57,8 @@ def get_available_models():
                     for model in data["models"]:
                         model_name = model.get("name", "")
                         supported_methods = model.get("supportedGenerationMethods", [])
-                        # generateContent를 지원하는 모델만 추가
-                        if "generateContent" in supported_methods:
+                        # streamGenerateContent를 지원하는 모델만 추가
+                        if "streamGenerateContent" in supported_methods:
                             # 모델 이름에서 버전 추출 (예: "models/gemini-pro" -> "gemini-pro")
                             if "/" in model_name:
                                 short_name = model_name.split("/")[-1]
@@ -85,145 +87,136 @@ API_CONFIGS = st.session_state.available_models
 if API_CONFIGS:
     API_VERSION = API_CONFIGS[0][0]
     MODEL_NAME = API_CONFIGS[0][1]
-    API_URL = f"https://generativelanguage.googleapis.com/{API_VERSION}/models/{MODEL_NAME}:generateContent"
 else:
     # 폴백
     API_VERSION = "v1beta"
     MODEL_NAME = "gemini-pro"
-    API_URL = f"https://generativelanguage.googleapis.com/{API_VERSION}/models/{MODEL_NAME}:generateContent"
 
-st.set_page_config(page_title="Gemini 챗봇", page_icon="🤖")
-st.title("🤖 무엇이든 물어보세요! Gemini 챗봇")
+st.set_page_config(page_title="Gemini 문법 교정 챗봇", page_icon="🤖")
+st.title("🤖 문법 교정 챗봇")
+st.caption("나는 문법을 마스터한 초등학생이야! 뭐든지 물어봐!")
 
 if not API_KEY or API_KEY == "여기에 실제 구글 API 키를 입력하세요":
     st.error("앗! 구글 API 키가 설정되지 않았어요. .env 파일을 확인해주세요.")
     st.stop()
 
-# 사용 가능한 모델 정보 표시
-if API_CONFIGS:
-    with st.expander("📋 사용 가능한 모델 목록"):
-        st.write("현재 API 키로 사용 가능한 모델들:")
-        for api_ver, model_name in API_CONFIGS:
-            st.write(f"  - **{api_ver}/{model_name}**")
-        if st.button("🔄 모델 목록 새로고침"):
-            st.session_state.available_models = get_available_models()
-            st.rerun()
-
-with st.form(key="chat_form"):
-    user_input = st.text_area("질문을 입력하세요", height=120, placeholder="예) 대한민국의 수도는 어디야?")
-    submitted = st.form_submit_button("Gemini에게 물어보기")
-
-if submitted and user_input.strip():
-    with st.spinner("Gemini가 답변을 만들고 있어요... 잠시만 기다려주세요!"):
-        payload = {
-            "contents": [
-                {
-                    "parts": [
-                        {"text": user_input.strip()},
-                    ]
-                }
-            ],
-            # API 안정성을 위해 generationConfig와 safetySettings를 추가합니다.
-            "generationConfig": {},
-            "safetySettings": [],
-        }
-        headers = {
-            "Content-Type": "application/json",
-        }
+# 스트리밍 응답을 처리하는 제너레이터 함수
+def stream_gemini_response(payload):
+    """Gemini API로부터 스트리밍 응답을 받아 텍스트 청크를 yield합니다."""
+    last_error = None
+    for api_version, model_name in API_CONFIGS:
+        # 스트리밍을 지원하는 streamGenerateContent 엔드포인트 사용
+        api_url = f"https://generativelanguage.googleapis.com/{api_version}/models/{model_name}:streamGenerateContent"
+        params = {"key": API_KEY, "alt": "sse"}
         
-        # 여러 API 버전과 모델 조합을 시도 (404 오류 시 자동으로 다음 조합 시도)
-        success = False
-        last_error = None
-        
-        for api_version, model_name in API_CONFIGS:
-            if success:
-                break
-                
-            api_url = f"https://generativelanguage.googleapis.com/{api_version}/models/{model_name}:generateContent"
-            params = {"key": API_KEY}
-            
-            try:
-                response = requests.post(api_url, params=params, headers=headers, json=payload, timeout=30)
+        try:
+            # stream=True로 요청을 보내고, 응답을 순회합니다.
+            with requests.post(api_url, params=params, headers={"Content-Type": "application/json"}, json=payload, stream=True, timeout=60) as response:
                 response.raise_for_status()
-                data = response.json()
-                
-                # 응답 구조 확인 및 텍스트 추출
-                if "candidates" in data and len(data["candidates"]) > 0:
-                    candidate = data["candidates"][0]
-                    if "content" in candidate and "parts" in candidate["content"]:
-                        text = candidate["content"]["parts"][0]["text"]
-                        st.markdown("### 🤖 Gemini의 답변")
-                        st.markdown(text)
-                        if api_version != API_VERSION or model_name != MODEL_NAME:
-                            st.info(f"💡 {api_version}/{model_name} 조합을 사용했습니다.")
-                        success = True
-                    else:
-                        st.error("응답 형식이 예상과 다릅니다.")
-                        st.json(data)
-                else:
-                    st.error("응답에 candidates가 없습니다.")
-                    st.json(data)
-            except requests.exceptions.HTTPError as e:
-                last_error = e
-                if response.status_code == 404:
-                    # 404 오류면 다음 모델 시도
-                    continue
-                else:
-                    # 다른 HTTP 오류는 즉시 처리
-                    break
-            except Exception as exc:
-                last_error = exc
-                break
-        
-        # 모든 모델 시도 실패 시 오류 표시
-        if not success:
-            if last_error and hasattr(last_error, 'response'):
-                response = last_error.response
-                if response.status_code == 404:
-                    st.error(f"모든 API 버전과 모델 조합을 시도했지만 찾을 수 없습니다 (404 오류)")
-                    st.info("💡 시도한 조합들:")
-                    for api_ver, model in API_CONFIGS:
-                        st.write(f"  - {api_ver}/{model}")
-                    st.info("💡 사용 가능한 모델을 확인하려면 아래 버튼을 클릭하세요.")
-                    
-                    # 사용 가능한 모델 목록 확인 버튼
-                    if st.button("사용 가능한 모델 목록 확인"):
-                        try:
-                            list_url = f"https://generativelanguage.googleapis.com/v1beta/models?key={API_KEY}"
-                            list_response = requests.get(list_url, timeout=10)
-                            if list_response.status_code == 200:
-                                models_data = list_response.json()
-                                if "models" in models_data:
-                                    st.success("✅ 사용 가능한 모델 목록:")
-                                    for model in models_data["models"]:
-                                        model_name = model.get("name", "알 수 없음")
-                                        supported_methods = model.get("supportedGenerationMethods", [])
-                                        st.write(f"  - **{model_name}** (지원 메서드: {', '.join(supported_methods)})")
-                                else:
-                                    st.json(models_data)
-                            else:
-                                st.error(f"모델 목록 조회 실패: {list_response.status_code}")
-                                st.text(list_response.text)
-                        except Exception as e:
-                            st.error(f"모델 목록 조회 중 오류: {e}")
-                    
-                    st.info("💡 API 키가 유효한지, Gemini API가 활성화되어 있는지 확인해주세요.")
-                    st.info("💡 Google Cloud Console에서 Generative Language API가 활성화되어 있는지 확인하세요.")
-                elif response.status_code == 400:
-                    st.error("요청 형식이 잘못되었습니다 (400 오류)")
-                    st.info("💡 API 키와 요청 내용을 확인해주세요.")
-                elif response.status_code == 403:
-                    st.error("API 키 권한이 없습니다 (403 오류)")
-                    st.info("💡 API 키가 유효한지, Gemini API가 활성화되어 있는지 확인해주세요.")
-                else:
-                    st.error(f"HTTP 오류가 발생했어요: {last_error}")
-                try:
-                    error_data = response.json()
-                    st.json(error_data)
-                except:
-                    st.text(response.text)
+                for chunk in response.iter_lines():
+                    if chunk:
+                        decoded_chunk = chunk.decode('utf-8')
+                        if decoded_chunk.startswith('data: '):
+                            try:
+                                data = json.loads(decoded_chunk[6:])
+                                if "candidates" in data and len(data["candidates"]) > 0:
+                                    candidate = data["candidates"][0]
+                                    if "content" in candidate and "parts" in candidate["content"]:
+                                        yield candidate["content"]["parts"][0]["text"]
+                            except json.JSONDecodeError:
+                                continue # 가끔 빈 data 청크나 잘못된 JSON이 올 수 있음
+                return # 성공적으로 스트리밍이 끝나면 함수 종료
+        except requests.exceptions.HTTPError as e:
+            last_error = e
+            if e.response.status_code == 404:
+                continue # 404 오류 시 다음 모델 시도
             else:
-                st.error(f"요청 중 오류가 발생했어요: {last_error}")
-                st.info("💡 API 키와 네트워크 연결을 확인해주세요.")
-else:
-    st.info("궁금한 것을 물어보면 Gemini가 친절하게 답변해 줄 거예요!")
+                break # 다른 HTTP 오류는 즉시 중단
+        except Exception as exc:
+            last_error = exc
+            break
+    
+    # 모든 시도가 실패한 경우
+    if last_error:
+        yield f"Gemini를 호출하는 데 실패했어요: {last_error}"
+
+
+# 세션 상태에 대화 기록 초기화
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+# 이전 대화 기록 표시
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+
+# 사용자 입력을 위한 채팅 입력창
+if prompt := st.chat_input("맞춤법이나 문법이 궁금한 문장을 입력해봐!"):
+    # 사용자 메시지를 대화 기록에 추가하고 화면에 표시
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
+
+    # Gemini 응답 생성
+    with st.chat_message("assistant"):
+        with st.spinner("Gemini가 열심히 생각하고 있어..."):
+            # 페르소나 설정 및 대화 기록을 API 요청 형식으로 변환
+            conversation_history = []
+            for msg in st.session_state.messages:
+                role = "model" if msg["role"] == "assistant" else "user"
+                conversation_history.append({"role": role, "parts": [{"text": msg["content"]}]})
+
+            # 마지막 사용자 메시지 앞에 페르소나 프롬프트 추가
+            # 참고: Gemini는 공식적인 'system' 역할이 없으므로, 대화의 일부로 컨텍스트를 제공합니다.
+            system_prompt = (
+                "너는 문법을 완벽하게 마스터한 똑똑한 초등학생이야. "
+                "사용자의 질문에 대해, 맞춤법과 문법을 친절하고 상세하게 설명해줘. "
+                "항상 밝고 명랑한 초등학생 말투를 사용해줘. 예를 들어, '~했어!', '~야!', '~거든!' 같은 말투를 사용해봐."
+            )
+            
+            # API 요청 페이로드 구성
+            payload = {
+                "contents": [
+                    {"role": "user", "parts": [{"text": system_prompt}]},
+                    {"role": "model", "parts": [{"text": "응, 알겠어! 이제부터 나는 문법을 마스터한 초등학생이야! 뭐든지 물어봐!"}]},
+                    *conversation_history
+                ],
+                "generationConfig": {
+                    "temperature": 0.7,
+                    "topP": 1,
+                    "topK": 1,
+                },
+                "safetySettings": [
+                    {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
+                    {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
+                    {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
+                    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
+                ],
+            }
+
+            try:
+                # 스트리밍 응답을 화면에 표시하고 전체 응답을 저장
+                response_stream = stream_gemini_response(payload)
+                full_response = st.write_stream(response_stream)
+                
+                # 성공적으로 응답을 받으면 대화 기록에 추가
+                if full_response:
+                     st.session_state.messages.append({"role": "assistant", "content": full_response})
+                else:
+                    # 스트림에서 아무것도 반환되지 않은 경우 (오류는 스트림 내에서 처리됨)
+                    st.error("앗, 응답을 생성하지 못했어. 다시 시도해줄래?")
+                    st.session_state.messages.pop() # 실패한 사용자 메시지 제거
+            except Exception as e:
+                error_message = f"스트리밍 중 오류가 발생했어요: {e}"
+                st.error(error_message)
+                # 실패한 경우, 마지막 사용자 메시지를 기록에서 제거하여 재시도할 수 있도록 함
+                st.session_state.messages.pop()
+            else:
+                # 스트림에서 아무것도 반환되지 않은 경우 (오류는 스트림 내에서 처리됨)
+                st.error("앗, 응답을 생성하지 못했어. 다시 시도해줄래?")
+                st.session_state.messages.pop() # 실패한 사용자 메시지 제거
+        except Exception as e:
+            error_message = f"스트리밍 중 오류가 발생했어요: {e}"
+            st.error(error_message)
+            # 실패한 경우, 마지막 사용자 메시지를 기록에서 제거하여 재시도할 수 있도록 함
+            st.session_state.messages.pop()
