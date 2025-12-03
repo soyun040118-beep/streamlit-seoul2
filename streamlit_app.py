@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import random
+import time
 import os
 from dotenv import load_dotenv
 import numpy as np
@@ -205,7 +206,6 @@ with st.container(border=True):
 
                     if is_correct:
                         st.session_state.answer_feedback = "correct"
-                        # 오답 모드에서 정답을 맞히면 해당 문제 제거
                         if st.session_state.retry_mode:
                             st.session_state.incorrect_questions[st.session_state.current_retry_index] = None
                     else:
@@ -220,8 +220,12 @@ with st.container(border=True):
         # 정답 제출 후 피드백 표시
         if 'answer_feedback' in st.session_state:
             if st.session_state.answer_feedback == "correct":
-                st.success("🎉 정답입니다! 정말 잘했어요!")
+                st.success("🎉 정답입니다! 잠시 후 다음 문제로 넘어갑니다.")
                 st.balloons()
+                time.sleep(1.5) # 1.5초 대기
+                del st.session_state.answer_feedback # 피드백 상태 초기화
+                generate_question(st.session_state.retry_mode) # 다음 문제 생성
+                st.rerun() # 페이지 새로고침
             elif st.session_state.answer_feedback == "incorrect":
                 question_data = st.session_state.current_question
                 st.error(f"아쉬워요, 정답은 **'{question_data['정답']}'** 입니다.")
@@ -288,13 +292,13 @@ st.markdown("---")
 st.subheader("✅ 꼼꼼히 확인하고 레벨 업!")
 st.info("각 문법 규칙을 잘 이해했는지 확인 퀴즈를 통해 점검해 보세요. 모든 문제를 맞혀야 학습 진도율 100%를 달성할 수 있어요!")
 
-with st.form("levelup_quiz_form"):
+with st.form("levelup_quiz_form", clear_on_submit=False):
     for i, q in enumerate(st.session_state.levelup_quiz):
         st.markdown(f"**Q{i+1}. [{q['오류 유형']}] 유형 확인 문제**")
         
         # 규칙 설명 Expander
         with st.expander("🤔 관련 규칙 보기"):
-            rule_info = st.session_state.grammar_df[st.session_state.grammar_df['오류 유형'] == q['오류 유형']].iloc[0]
+            rule_info = st.session_state.grammar_df.loc[st.session_state.grammar_df['오류 유형'] == q['오류 유형']].iloc[0]
             st.write(f"**규칙:** {rule_info['규칙 설명']}")
             st.write(f"**예시:** '{rule_info['예시 (틀린 문장)']}' ➡️ '{rule_info['예시 (맞는 문장)']}'")
 
@@ -308,11 +312,14 @@ with st.form("levelup_quiz_form"):
             index=None,
             key=f"levelup_{i}"
         )
-        st.session_state.levelup_quiz[i]['user_answer'] = user_answer
 
     levelup_submitted = st.form_submit_button("모두 풀었어요! 정답 제출하기", type="primary", use_container_width=True)
 
     if levelup_submitted:
+        # 제출 시점에 답변을 session_state에 저장
+        for i, q in enumerate(st.session_state.levelup_quiz):
+            st.session_state.levelup_quiz[i]['user_answer'] = st.session_state[f"levelup_{i}"]
+
         st.session_state.levelup_submitted = True
         # 채점
         all_correct = True
