@@ -1,6 +1,5 @@
 import os
 import json
-import json
 import requests
 import streamlit as st
 from dotenv import load_dotenv
@@ -94,6 +93,14 @@ else:
 
 st.set_page_config(page_title="Gemini 문법 교정 챗봇", page_icon="🤖")
 st.title("🤖 문법 교정 챗봇")
+
+# 사이드바에 '새 대화 시작' 버튼 추가
+with st.sidebar:
+    st.title("메뉴")
+    if st.button("새 대화 시작", use_container_width=True, type="primary"):
+        st.session_state.messages = []
+        st.rerun()
+
 st.caption("나는 문법을 마스터한 초등학생이야! 뭐든지 물어봐!")
 
 if not API_KEY or API_KEY == "여기에 실제 구글 API 키를 입력하세요":
