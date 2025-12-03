@@ -66,31 +66,40 @@ def get_quiz_data():
     return pd.DataFrame(quiz_data)
 
 # --- 환경 변수 로드 ---
-# 여러 경로에서 .env 파일 찾기 시도
-env_paths = []
+# Streamlit Cloud와 로컬 환경 모두 지원
 try:
-    # 현재 파일의 디렉토리
-    env_paths.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env'))
+    # Streamlit Cloud의 secrets에서 먼저 시도
+    if hasattr(st, 'secrets') and 'GOOGLE_API_KEY' in st.secrets:
+        GOOGLE_API_KEY = st.secrets['GOOGLE_API_KEY']
+    else:
+        # 로컬 환경: .env 파일에서 환경 변수 로드
+        env_paths = []
+        try:
+            # 현재 파일의 디렉토리
+            env_paths.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env'))
+        except:
+            pass
+
+        # 현재 작업 디렉토리
+        env_paths.append('.env')
+        env_paths.append(os.path.join(os.getcwd(), '.env'))
+
+        # .env 파일 찾아서 로드
+        loaded = False
+        for env_path in env_paths:
+            if os.path.exists(env_path):
+                load_dotenv(env_path, override=True)
+                loaded = True
+                break
+
+        # 모든 경로에서 찾지 못한 경우 기본 로드 시도
+        if not loaded:
+            load_dotenv()
+        
+        GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 except:
-    pass
-
-# 현재 작업 디렉토리
-env_paths.append('.env')
-env_paths.append(os.path.join(os.getcwd(), '.env'))
-
-# .env 파일 찾아서 로드
-loaded = False
-for env_path in env_paths:
-    if os.path.exists(env_path):
-        load_dotenv(env_path, override=True)
-        loaded = True
-        break
-
-# 모든 경로에서 찾지 못한 경우 기본 로드 시도
-if not loaded:
-    load_dotenv()
-
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+    # 폴백: 환경 변수에서 직접 가져오기
+    GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
 # --- 1. 앱 기본 설정 및 세션 상태 초기화 ---
 st.set_page_config(layout="wide")
