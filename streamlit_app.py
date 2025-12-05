@@ -146,28 +146,47 @@ if 'grammar_df' not in st.session_state:
     if 'current_retry_index' not in st.session_state:
         st.session_state.current_retry_index = 0
 
-# --- 2. 문법 오류 차트 및 데이터프레임 탭 ---
+# --- 2. 문법 오류 차트 ---
 st.markdown("---")
 st.subheader("📊 친구들이 가장 많이 헷갈려요!")
 st.write("어떤 문법을 가장 많이 틀리는지 차트로 확인하고, 중요한 규칙부터 공부해 보세요.")
 
-tab1, tab2 = st.tabs(["오류 빈도 차트", "규칙 전체 보기"])
+# 오류 빈도 차트
+chart_data = st.session_state.grammar_df.sort_values(by='빈도 (가상)', ascending=False)
+st.bar_chart(
+    chart_data,
+    x='오류 유형',
+    y='빈도 (가상)',
+    color='#FF4B4B',
+    height=300
+)
 
-with tab1:
-    chart_data = st.session_state.grammar_df.sort_values(by='빈도 (가상)', ascending=False)
-    st.bar_chart(
-        chart_data,
-        x='오류 유형',
-        y='빈도 (가상)',
-        color='#FF4B4B',
-        height=300
-    )
+# --- 2-1. 규칙 전체 보기 (개선된 가독성) ---
+st.markdown("---")
+st.subheader("📚 문법 규칙 전체 보기")
+st.write("각 문법 규칙을 자세히 확인하고 예시를 통해 이해해 보세요.")
 
-with tab2:
-    st.dataframe(
-        st.session_state.grammar_df.drop(columns=['ID']).set_index('오류 유형'),
-        use_container_width=True
-    )
+# 각 규칙을 카드 형태로 표시하여 가독성 향상
+for idx, row in st.session_state.grammar_df.iterrows():
+    with st.container(border=True):
+        col1, col2 = st.columns([1, 3])
+        
+        with col1:
+            st.markdown(f"### {row['오류 유형']}")
+            st.metric("오류 빈도", f"{row['빈도 (가상)']}회")
+        
+        with col2:
+            st.markdown("#### 📖 규칙 설명")
+            st.info(row['규칙 설명'])
+            
+            st.markdown("#### ✍️ 예시")
+            col_ex1, col_ex2 = st.columns(2)
+            with col_ex1:
+                st.error(f"**틀린 문장:**\n{row['예시 (틀린 문장)']}")
+            with col_ex2:
+                st.success(f"**맞는 문장:**\n{row['예시 (맞는 문장)']}")
+    
+    st.markdown("")  # 간격 추가
 
 # --- 5. 문법 퀴즈 및 오답 분석 ---
 st.markdown("---")

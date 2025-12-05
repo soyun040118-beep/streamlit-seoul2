@@ -1,0 +1,16 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Auto Commit and Push",
+            "type": "shell",
+            "command": "python",
+            "args": ["${workspaceFolder}/auto_commit.py"],
+            "problemMatcher": [],
+            "runOptions": {
+                "runOn": "folderOpen"
+            }
+        }
+    ]
+}
+

@@ -1,0 +1,9 @@
+{
+    "files.autoSave": "afterDelay",
+    "files.autoSaveDelay": 1000,
+    "task.autoDetect": "on",
+    "git.enableSmartCommit": true,
+    "git.confirmSync": false,
+    "git.autofetch": true
+}
+
