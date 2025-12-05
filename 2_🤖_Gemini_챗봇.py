@@ -3,6 +3,7 @@ import json
 import requests
 import streamlit as st
 from dotenv import load_dotenv
+from datetime import datetime
 
 # API 키 로드 (Streamlit Cloud와 로컬 환경 모두 지원)
 # Streamlit Cloud에서는 st.secrets를 사용, 로컬에서는 .env 파일 사용
@@ -91,17 +92,108 @@ else:
     API_VERSION = "v1beta"
     MODEL_NAME = "gemini-pro"
 
-st.set_page_config(page_title="Gemini 문법 교정 챗봇", page_icon="🤖")
-st.title("🤖 문법 교정 챗봇")
+st.set_page_config(page_title="Gemini 문법 교정 챗봇", page_icon="🤖", layout="wide")
+
+# SNS 스타일 CSS 추가
+st.markdown("""
+<style>
+    /* 메인 컨테이너 스타일 */
+    .main-chat-container {
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: #f5f5f5;
+        border-radius: 10px;
+    }
+    
+    /* 사용자 메시지 스타일 (오른쪽) */
+    .user-message {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 15px;
+    }
+    
+    .user-bubble {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 12px 16px;
+        border-radius: 18px 18px 4px 18px;
+        max-width: 70%;
+        word-wrap: break-word;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        margin-left: auto;
+    }
+    
+    /* 챗봇 메시지 스타일 (왼쪽) */
+    .assistant-message {
+        display: flex;
+        justify-content: flex-start;
+        margin-bottom: 15px;
+    }
+    
+    .assistant-bubble {
+        background: white;
+        color: #333;
+        padding: 12px 16px;
+        border-radius: 18px 18px 18px 4px;
+        max-width: 70%;
+        word-wrap: break-word;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        border: 1px solid #e0e0e0;
+    }
+    
+    /* 시간 표시 */
+    .message-time {
+        font-size: 0.7em;
+        color: #999;
+        margin-top: 4px;
+        text-align: right;
+    }
+    
+    .assistant-time {
+        text-align: left;
+    }
+    
+    /* 채팅 입력창 스타일 */
+    .stChatInput {
+        position: sticky;
+        bottom: 0;
+        background: white;
+        padding: 10px;
+        border-radius: 10px;
+        box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+    }
+    
+    /* 헤더 스타일 */
+    .chat-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 20px;
+        border-radius: 10px 10px 0 0;
+        text-align: center;
+        margin-bottom: 20px;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# 헤더
+st.markdown("""
+<div class="chat-header">
+    <h1 style="margin: 0; color: white;">🤖 문법 교정 챗봇</h1>
+    <p style="margin: 5px 0 0 0; color: rgba(255,255,255,0.9);">나는 문법을 마스터한 초등학생이야! 뭐든지 물어봐!</p>
+</div>
+""", unsafe_allow_html=True)
 
 # 사이드바에 '새 대화 시작' 버튼 추가
 with st.sidebar:
     st.title("메뉴")
-    if st.button("새 대화 시작", use_container_width=True, type="primary"):
+    if st.button("🗑️ 새 대화 시작", use_container_width=True, type="primary"):
         st.session_state.messages = []
         st.rerun()
-
-st.caption("나는 문법을 마스터한 초등학생이야! 뭐든지 물어봐!")
+    
+    st.markdown("---")
+    st.markdown("### 💬 대화 기록")
+    st.caption(f"총 {len(st.session_state.get('messages', []))}개의 메시지")
 
 if not API_KEY or API_KEY == "여기에 실제 구글 API 키를 입력하세요":
     st.error("앗! 구글 API 키가 설정되지 않았어요. .env 파일을 확인해주세요.")
@@ -152,78 +244,140 @@ def stream_gemini_response(payload):
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# 이전 대화 기록 표시
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+# 대화 기록 컨테이너
+chat_container = st.container()
+
+# 이전 대화 기록 표시 (SNS 스타일)
+with chat_container:
+    for idx, message in enumerate(st.session_state.messages):
+        role = message["role"]
+        content = message["content"]
+        timestamp = message.get("timestamp", "")
+        
+        if role == "user":
+            # 사용자 메시지 (오른쪽)
+            st.markdown(f"""
+            <div class="user-message">
+                <div class="user-bubble">
+                    {content}
+                    <div class="message-time">{timestamp}</div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            # 챗봇 메시지 (왼쪽)
+            st.markdown(f"""
+            <div class="assistant-message">
+                <div class="assistant-bubble">
+                    {content}
+                    <div class="message-time assistant-time">{timestamp}</div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
 
 # 사용자 입력을 위한 채팅 입력창
 if prompt := st.chat_input("맞춤법이나 문법이 궁금한 문장을 입력해봐!"):
+    # 현재 시간 가져오기
+    current_time = datetime.now().strftime("%H:%M")
+    
     # 사용자 메시지를 대화 기록에 추가하고 화면에 표시
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.markdown(prompt)
+    user_message = {"role": "user", "content": prompt, "timestamp": current_time}
+    st.session_state.messages.append(user_message)
+    
+    # 사용자 메시지 즉시 표시 (SNS 스타일)
+    with chat_container:
+        st.markdown(f"""
+        <div class="user-message">
+            <div class="user-bubble">
+                {prompt}
+                <div class="message-time">{current_time}</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
     # Gemini 응답 생성
-    with st.chat_message("assistant"):
-        with st.spinner("Gemini가 열심히 생각하고 있어..."):
-            # 페르소나 설정 및 대화 기록을 API 요청 형식으로 변환
-            conversation_history = []
-            for msg in st.session_state.messages:
-                role = "model" if msg["role"] == "assistant" else "user"
-                conversation_history.append({"role": role, "parts": [{"text": msg["content"]}]})
+    with chat_container:
+        # 챗봇 응답 영역 생성
+        response_placeholder = st.empty()
+        
+        with response_placeholder.container():
+            with st.spinner("💭 생각 중..."):
+                # 페르소나 설정 및 대화 기록을 API 요청 형식으로 변환
+                conversation_history = []
+                for msg in st.session_state.messages:
+                    role = "model" if msg["role"] == "assistant" else "user"
+                    conversation_history.append({"role": role, "parts": [{"text": msg["content"]}]})
 
-            # 마지막 사용자 메시지 앞에 페르소나 프롬프트 추가
-            # 참고: Gemini는 공식적인 'system' 역할이 없으므로, 대화의 일부로 컨텍스트를 제공합니다.
-            system_prompt = (
-                "너는 문법을 완벽하게 마스터한 똑똑한 초등학생이야. "
-                "사용자의 질문에 대해, 맞춤법과 문법을 친절하고 상세하게 설명해줘. "
-                "항상 밝고 명랑한 초등학생 말투를 사용해줘. 예를 들어, '~했어!', '~야!', '~거든!' 같은 말투를 사용해봐."
-            )
-            
-            # API 요청 페이로드 구성
-            payload = {
-                "contents": [
-                    {"role": "user", "parts": [{"text": system_prompt}]},
-                    {"role": "model", "parts": [{"text": "응, 알겠어! 이제부터 나는 문법을 마스터한 초등학생이야! 뭐든지 물어봐!"}]},
-                    *conversation_history
-                ],
-                "generationConfig": {
-                    "temperature": 0.7,
-                    "topP": 1,
-                    "topK": 1,
-                },
-                "safetySettings": [
-                    {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
-                    {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
-                    {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
-                    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
-                ],
-            }
-
-            try:
-                # 스트리밍 응답을 화면에 표시하고 전체 응답을 저장
-                response_stream = stream_gemini_response(payload)
-                full_response = st.write_stream(response_stream)
+                # 마지막 사용자 메시지 앞에 페르소나 프롬프트 추가
+                system_prompt = (
+                    "너는 문법을 완벽하게 마스터한 똑똑한 초등학생이야. "
+                    "사용자의 질문에 대해, 맞춤법과 문법을 친절하고 상세하게 설명해줘. "
+                    "항상 밝고 명랑한 초등학생 말투를 사용해줘. 예를 들어, '~했어!', '~야!', '~거든!' 같은 말투를 사용해봐."
+                )
                 
-                # 성공적으로 응답을 받으면 대화 기록에 추가
-                if full_response:
-                     st.session_state.messages.append({"role": "assistant", "content": full_response})
-                else:
-                    # 스트림에서 아무것도 반환되지 않은 경우 (오류는 스트림 내에서 처리됨)
-                    st.error("앗, 응답을 생성하지 못했어. 다시 시도해줄래?")
-                    st.session_state.messages.pop() # 실패한 사용자 메시지 제거
-            except Exception as e:
-                error_message = f"스트리밍 중 오류가 발생했어요: {e}"
-                st.error(error_message)
-                # 실패한 경우, 마지막 사용자 메시지를 기록에서 제거하여 재시도할 수 있도록 함
-                st.session_state.messages.pop()
-            else:
-                # 스트림에서 아무것도 반환되지 않은 경우 (오류는 스트림 내에서 처리됨)
-                st.error("앗, 응답을 생성하지 못했어. 다시 시도해줄래?")
-                st.session_state.messages.pop() # 실패한 사용자 메시지 제거
-        except Exception as e:
-            error_message = f"스트리밍 중 오류가 발생했어요: {e}"
-            st.error(error_message)
-            # 실패한 경우, 마지막 사용자 메시지를 기록에서 제거하여 재시도할 수 있도록 함
-            st.session_state.messages.pop()
+                # API 요청 페이로드 구성
+                payload = {
+                    "contents": [
+                        {"role": "user", "parts": [{"text": system_prompt}]},
+                        {"role": "model", "parts": [{"text": "응, 알겠어! 이제부터 나는 문법을 마스터한 초등학생이야! 뭐든지 물어봐!"}]},
+                        *conversation_history
+                    ],
+                    "generationConfig": {
+                        "temperature": 0.7,
+                        "topP": 1,
+                        "topK": 1,
+                    },
+                    "safetySettings": [
+                        {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
+                        {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
+                        {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
+                        {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
+                    ],
+                }
+
+                try:
+                    # 스트리밍 응답을 수집
+                    response_stream = stream_gemini_response(payload)
+                    full_response = ""
+                    
+                    # 스트리밍 응답을 실시간으로 표시
+                    streaming_placeholder = st.empty()
+                    for chunk in response_stream:
+                        full_response += chunk
+                        # 실시간으로 업데이트되는 메시지 표시
+                        streaming_placeholder.markdown(f"""
+                        <div class="assistant-message">
+                            <div class="assistant-bubble">
+                                {full_response}
+                                <div class="message-time assistant-time">{current_time}</div>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+                    # 최종 응답을 대화 기록에 추가
+                    if full_response:
+                        assistant_time = datetime.now().strftime("%H:%M")
+                        st.session_state.messages.append({
+                            "role": "assistant", 
+                            "content": full_response,
+                            "timestamp": assistant_time
+                        })
+                        # 최종 메시지로 업데이트
+                        streaming_placeholder.markdown(f"""
+                        <div class="assistant-message">
+                            <div class="assistant-bubble">
+                                {full_response}
+                                <div class="message-time assistant-time">{assistant_time}</div>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    else:
+                        # 스트림에서 아무것도 반환되지 않은 경우
+                        st.error("앗, 응답을 생성하지 못했어. 다시 시도해줄래?")
+                        st.session_state.messages.pop() # 실패한 사용자 메시지 제거
+                except Exception as e:
+                    error_message = f"스트리밍 중 오류가 발생했어요: {e}"
+                    st.error(error_message)
+                    # 실패한 경우, 마지막 사용자 메시지를 기록에서 제거하여 재시도할 수 있도록 함
+                    if st.session_state.messages and st.session_state.messages[-1]["role"] == "user":
+                        st.session_state.messages.pop()
