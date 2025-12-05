@@ -295,10 +295,11 @@ with st.container(border=True):
                         st.session_state.answer_feedback_question_id = question_id
                         if st.session_state.retry_mode:
                             st.session_state.incorrect_questions[st.session_state.current_retry_index] = None
-                        # 정답일 때 풍선 표시 후 빠르게 다음 문제로 이동 (1초 후)
+                        # 정답일 때 풍선 표시 후 빠르게 다음 문제로 이동 (2초 후)
                         st.session_state[f"auto_next_question_{question_id}"] = True
                         st.session_state[f"auto_next_timer_{question_id}"] = time.time()
-                        st.session_state[f"auto_next_delay_{question_id}"] = 1.0  # 1초 딜레이
+                        st.session_state[f"auto_next_delay_{question_id}"] = 2.0  # 2초 딜레이 (풍선을 보여주기 위해)
+                        # 풍선을 보여주기 위해 즉시 rerun하지 않고 피드백 표시 후 처리
                     else:
                         st.session_state.answer_feedback = "incorrect"
                         st.session_state.answer_feedback_question_id = question_id
@@ -324,16 +325,16 @@ with st.container(border=True):
             if st.session_state.answer_feedback == "correct":
                 st.success("🎉 정답입니다!")
                 st.balloons()
-                # 정답일 때 빠르게 다음 문제로 넘어가기 (1초 후)
+                # 정답일 때 빠르게 다음 문제로 넘어가기 (2초 후)
                 auto_next_key = f"auto_next_question_{question_id}"
                 timer_key = f"auto_next_timer_{question_id}"
                 delay_key = f"auto_next_delay_{question_id}"
                 if st.session_state.get(auto_next_key, False):
                     elapsed = time.time() - st.session_state.get(timer_key, time.time())
-                    delay = st.session_state.get(delay_key, 1.0)
+                    delay = st.session_state.get(delay_key, 2.0)
                     remaining = max(0, delay - elapsed)
                     if remaining > 0:
-                        # 자동으로 다시 렌더링하여 다음 문제로 이동
+                        # 풍선을 보여주기 위해 잠시 대기 후 다시 렌더링
                         st.rerun()
                     else:
                         # 시간이 지나면 다음 문제로 이동
