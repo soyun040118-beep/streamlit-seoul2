@@ -319,6 +319,7 @@ with st.container(border=True):
                         # 오답일 때도 자동으로 다음 문제로 이동 (3초 후)
                         st.session_state[f"auto_next_question_{question_id}"] = True
                         st.session_state[f"auto_next_timer_{question_id}"] = time.time()
+                        # 첫 번째 렌더링에서는 피드백만 보여주고, 3초 후 자동으로 넘어감
 
         # 정답 제출 후 피드백 표시 (같은 문제에 대해서만)
         if is_submitted and st.session_state.get('answer_feedback_question_id') == question_id:
@@ -347,13 +348,16 @@ with st.container(border=True):
                     remaining = max(0, 3 - int(elapsed))
                     if remaining > 0:
                         st.info(f"⏱️ {remaining}초 후 자동으로 다음 문제로 넘어갑니다...")
-                        time.sleep(0.5)  # 짧은 대기 후 다시 체크
+                        # 자동으로 다시 렌더링하여 카운트다운 업데이트
+                        time.sleep(1)
                         st.rerun()
                     else:
                         # 시간이 지나면 다음 문제로 이동
                         st.session_state[f"is_submitted_{question_id}"] = False
                         st.session_state[f"submitted_answer_{question_id}"] = None
                         st.session_state[auto_next_key] = False
+                        if timer_key in st.session_state:
+                            del st.session_state[timer_key]
                         generate_question(st.session_state.retry_mode)
                         st.rerun()
 
