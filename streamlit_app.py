@@ -18,7 +18,7 @@ def get_grammar_data():
             "'데'는 직접 경험한 사실을, '대'는 다른 사람에게 들은 내용을 전달할 때 사용해요.",
             '받침이 있으면 **\'이에요\'**, 받침이 없으면 **\'예요\'**를 써요. 하지만 **\'아니다\'**는 무조건 **\'아니에요\'**가 맞아요! (줄여서 \'아녜요\'도 O) 그 이유가 궁금한 학생은 선생님과 함께 탐구해볼까요?',
             "'어떻게'는 '어떠하게'의 준말로 방법을 물을 때 쓰고, '어떡해'는 '어떻게 해'의 준말로 걱정되는 상황에서 사용해요.",
-            "'되어'의 준말이 '돼'예요. '되어'를 넣어 말이 되면 '돼'를 쓸 수 있어요. **사용법:** '되' 또는 '돼' 앞에 '하' 또는 '해'를 넣어보세요. '돼'는 '해'로 바꾸었을 때 말이 되면 '돼'를 씁니다. (예: '안 돼' → '안 해' ✓) '되'는 '하'로 바꾸었을 때 말이 되면 '되'를 씁니다. (예: '그날이 되었을 때' → '그날이 하였을 때' ✓)",
+            "'되어'의 준말이 '돼'예요. '되어'를 넣어 말이 되면 '돼'를 쓸 수 있어요. **사용법:** '되' 또는 '돼' 앞에 '하' 또는 '해'를 넣어보세요. '돼'는 '해'로 바꾸었을 때 말이 되면 '돼'를 씁니다. (예: '안 돼' → '안 해' ✓) '되'는 '하'로 바꾸었을 때 말이 되면 '되'를 씁니다. (예: '선생님이 되고 싶어' → '선생님이 하고 싶어' ✓)",
             "'아니'의 준말이 '안'이에요. '아니하다'의 준말은 '않다'고요."
         ],
         '예시 (틀린 문장)': [
@@ -460,6 +460,19 @@ with st.container(border=True):
         question_data = st.session_state.current_question
         st.markdown(f"**문제:** 다음 중 문법적으로 올바른 문장을 고르세요.")
         st.info(f"#### {question_data['문제']}")
+        
+        # 안내 문구 추가
+        st.markdown("""
+        <div style="background-color: #e8f4f8; 
+                    padding: 12px; 
+                    border-radius: 8px; 
+                    border-left: 4px solid #1f77b4;
+                    margin: 10px 0;
+                    font-size: 16px;
+                    color: #2c3e50;">
+            💡 <strong>알맞은 답을 고르면 저절로 다음 문제로 넘어가고, 틀린 답을 고르면 나만의 오답노트가 생성돼요!</strong>
+        </div>
+        """, unsafe_allow_html=True)
 
         # 선택지 생성 및 섞기 (매번 동일하게 섞이도록 시드 고정)
         question_id = hash(question_data['문제'])
@@ -671,8 +684,9 @@ if st.session_state.quiz_history:
                 st.write("아직 기록된 오답이 없습니다.")
 
 # --- 7. 오답 노트 및 다시 풀기 기능 ---
+# 오답 노트는 퀴즈가 진행 중이 아닐 때만 표시 (렉 방지)
 incorrect_count = sum(1 for q in st.session_state.get('incorrect_questions', []) if q is not None)
-if incorrect_count > 0:
+if incorrect_count > 0 and st.session_state.current_question is None:
     st.markdown("---")
     st.subheader("📓 나만의 비밀 오답 노트")
     
@@ -726,82 +740,83 @@ st.markdown("---")
 st.subheader("✅ 꼼꼼히 확인하고 레벨 업!")
 st.info("각 문법 규칙을 잘 이해했는지 확인 퀴즈를 통해 점검해 보세요. 모든 문제를 맞혀야 학습 진도율 100%를 달성할 수 있어요!")
 
-# 레벨업 퀴즈 폼
-form_key = "levelup_quiz_form"
-with st.form(form_key, clear_on_submit=False):
-    for i, q in enumerate(st.session_state.levelup_quiz):
-        st.markdown(f"**Q{i+1}. [{q['오류 유형']}] 유형 확인 문제**")
-        
-        # 규칙 설명 Expander
-        with st.expander("🤔 관련 규칙 보기"):
-            rule_info = st.session_state.grammar_df.loc[st.session_state.grammar_df['오류 유형'] == q['오류 유형']].iloc[0]
-            with st.container(border=True):
-                st.info(f"**규칙:** {rule_info['규칙 설명']}")
-                st.success(f"**올바른 예시:** {rule_info['예시 (맞는 문장)']}")
-                st.error(f"**틀린 예시:** {rule_info['예시 (틀린 문장)']}")
-
-        # 선택지 생성 및 섞기 (문제별로 고정된 시드 사용)
-        random.seed(i + hash(q['문제']))
-        options = q['오답들'] + [q['정답']]
-        random.shuffle(options)
-        
-        # 현재 저장된 답변이 있으면 표시
-        current_answer = st.session_state.levelup_quiz[i].get('user_answer', None)
-        default_index = None
-        if current_answer and current_answer in options:
-            default_index = options.index(current_answer)
-        
-        user_answer = st.radio(
-            f"다음 중 올바른 문장을 고르세요: **{q['문제']}**",
-            options,
-            index=default_index,
-            key=f"levelup_radio_{i}"
-        )
-        
-        # 폼 제출 전에도 답변 저장 (실시간 업데이트)
-        if user_answer is not None:
-            st.session_state.levelup_quiz[i]['user_answer'] = user_answer
-
-    levelup_submitted = st.form_submit_button("모두 풀었어요! 정답 제출하기", type="primary", use_container_width=True)
-
-    if levelup_submitted:
-        # 제출 시점에 답변을 session_state에 저장 (이중 확인)
+# 레벨업 퀴즈 폼 (퀴즈가 진행 중이 아닐 때만 표시)
+if st.session_state.current_question is None:
+    form_key = "levelup_quiz_form"
+    with st.form(form_key, clear_on_submit=False):
         for i, q in enumerate(st.session_state.levelup_quiz):
-            radio_value = st.session_state.get(f"levelup_radio_{i}", None)
-            if radio_value is not None:
-                st.session_state.levelup_quiz[i]['user_answer'] = radio_value
+            st.markdown(f"**Q{i+1}. [{q['오류 유형']}] 유형 확인 문제**")
+            
+            # 규칙 설명 Expander
+            with st.expander("🤔 관련 규칙 보기"):
+                rule_info = st.session_state.grammar_df.loc[st.session_state.grammar_df['오류 유형'] == q['오류 유형']].iloc[0]
+                with st.container(border=True):
+                    st.info(f"**규칙:** {rule_info['규칙 설명']}")
+                    st.success(f"**올바른 예시:** {rule_info['예시 (맞는 문장)']}")
+                    st.error(f"**틀린 예시:** {rule_info['예시 (틀린 문장)']}")
 
-        st.session_state.levelup_submitted = True
-        # 채점
-        all_correct = True
+            # 선택지 생성 및 섞기 (문제별로 고정된 시드 사용)
+            random.seed(i + hash(q['문제']))
+            options = q['오답들'] + [q['정답']]
+            random.shuffle(options)
+            
+            # 현재 저장된 답변이 있으면 표시
+            current_answer = st.session_state.levelup_quiz[i].get('user_answer', None)
+            default_index = None
+            if current_answer and current_answer in options:
+                default_index = options.index(current_answer)
+            
+            user_answer = st.radio(
+                f"다음 중 올바른 문장을 고르세요: **{q['문제']}**",
+                options,
+                index=default_index,
+                key=f"levelup_radio_{i}"
+            )
+            
+            # 폼 제출 전에도 답변 저장 (실시간 업데이트)
+            if user_answer is not None:
+                st.session_state.levelup_quiz[i]['user_answer'] = user_answer
+
+        levelup_submitted = st.form_submit_button("모두 풀었어요! 정답 제출하기", type="primary", use_container_width=True)
+
+        if levelup_submitted:
+            # 제출 시점에 답변을 session_state에 저장 (이중 확인)
+            for i, q in enumerate(st.session_state.levelup_quiz):
+                radio_value = st.session_state.get(f"levelup_radio_{i}", None)
+                if radio_value is not None:
+                    st.session_state.levelup_quiz[i]['user_answer'] = radio_value
+
+            st.session_state.levelup_submitted = True
+            # 채점
+            all_correct = True
+            for q in st.session_state.levelup_quiz:
+                user_ans = q.get('user_answer', None)
+                if user_ans == q['정답']:
+                    q['correct'] = True
+                else:
+                    q['correct'] = False
+                    all_correct = False
+            
+            if all_correct:
+                st.balloons()
+                st.success("### 💯 완벽해요! 모든 확인 문제를 맞혔습니다!")
+            else:
+                st.warning("### 아쉬워요! 틀린 문제가 있어요. 아래 채점표를 보고 다시 도전해 보세요!")
+
+    # 레벨업 퀴즈 제출 후 결과 표시 (퀴즈가 진행 중이 아닐 때만)
+    if st.session_state.levelup_submitted and st.session_state.current_question is None:
+        st.markdown("##### 📝 레벨업 퀴즈 채점표")
+        results_data = []
         for q in st.session_state.levelup_quiz:
             user_ans = q.get('user_answer', None)
-            if user_ans == q['정답']:
-                q['correct'] = True
-            else:
-                q['correct'] = False
-                all_correct = False
-        
-        if all_correct:
-            st.balloons()
-            st.success("### 💯 완벽해요! 모든 확인 문제를 맞혔습니다!")
-        else:
-            st.warning("### 아쉬워요! 틀린 문제가 있어요. 아래 채점표를 보고 다시 도전해 보세요!")
-
-# 레벨업 퀴즈 제출 후 결과 표시
-if st.session_state.levelup_submitted:
-    st.markdown("##### 📝 레벨업 퀴즈 채점표")
-    results_data = []
-    for q in st.session_state.levelup_quiz:
-        user_ans = q.get('user_answer', None)
-        results_data.append({
-            "유형": q['오류 유형'],
-            "문제": q['문제'],
-            "나의 답변": user_ans if user_ans is not None else "미선택",
-            "정답": q['정답'],
-            "결과": "✅" if q.get('correct', False) else "❌"
-        })
-    st.dataframe(results_data, use_container_width=True, hide_index=True)
+            results_data.append({
+                "유형": q['오류 유형'],
+                "문제": q['문제'],
+                "나의 답변": user_ans if user_ans is not None else "미선택",
+                "정답": q['정답'],
+                "결과": "✅" if q.get('correct', False) else "❌"
+            })
+        st.dataframe(results_data, use_container_width=True, hide_index=True)
 
 
 # --- 4. (구) -> (신) 나의 학습 리포트 (위치 이동 및 로직 변경) ---
@@ -906,6 +921,33 @@ with st.container(border=True):
         </p>
     </div>
     """, unsafe_allow_html=True)
+    
+    # 질문 형식 예시 추가
+    with st.expander("💡 올바른 질문 형식 예시", expanded=False):
+        st.markdown("""
+        **좋은 질문 형식:**
+        
+        1. **구체적인 문장 제시:**
+           - "이 문장이 맞나요? '저는 학생예요.'"
+           - "'안되'와 '안돼' 중 어느 것이 맞나요?"
+        
+        2. **문법 규칙 질문:**
+           - "'에요'와 '예요'의 차이점을 알려주세요."
+           - "'되'와 '돼'를 구분하는 방법을 설명해주세요."
+        
+        3. **맞춤법 확인:**
+           - "'어떡해'와 '어떻게' 중 어떤 것이 맞나요?"
+           - "이 문장의 맞춤법을 확인해주세요: '그러면 안되.'"
+        
+        4. **예시 문장과 함께:**
+           - "'아니예요'와 '아니에요' 중 어느 것이 맞나요? 예: '아니예요, 괜찮아요.'"
+        
+        **피해야 할 질문:**
+        - 너무 모호한 질문: "문법 알려줘"
+        - 여러 질문을 한 번에: "에요 예요 되 돼 안 않 모두 알려줘"
+        
+        💡 **팁:** 구체적인 문장이나 단어를 제시하면 더 정확한 답변을 받을 수 있어요!
+        """)
 
 # API 키 확인
 if not GOOGLE_API_KEY or GOOGLE_API_KEY == "여기에 실제 구글 API 키를 입력하세요":
@@ -987,6 +1029,9 @@ else:
                         "말투는 친절하고 정중하게 하되, 문법 설명은 정확하고 전문적으로 해줘. "
                         "'~예요', '~입니다' 같은 정중한 말투를 사용하고, 문법 규칙을 명확하게 설명해줘. "
                         "틀린 답변을 절대 하지 말고, 한국어 문법 규칙을 정확하게 설명해야 해. "
+                        "\n**중요:** 사용자가 문법적으로 틀린 표현을 물어보거나 틀린 답을 제시하면, "
+                        "반드시 '문법적으로 옳지 않아요.' 또는 '문법적으로 옳지 않습니다.'라고 먼저 말하고 "
+                        "그 다음 올바른 표현을 설명해줘. "
                         "\n\n**중요한 문법 규칙 (반드시 정확하게 지켜야 함):**\n"
                         "\n1. **에요/예요 규칙:**\n"
                         "- 받침이 있으면 '이에요', 받침이 없으면 '예요'를 써요.\n"
@@ -1008,7 +1053,7 @@ else:
                         "- '돼': '해'로 바꾸었을 때 말이 되면 '돼'를 씁니다.\n"
                         "  예: '쓰레기를 이곳에 버리면 안 돼' → '쓰레기를 이곳에 버리면 안 해' (자연스러움) ✓\n"
                         "- '되': '하'로 바꾸었을 때 말이 되면 '되'를 씁니다.\n"
-                        "  예: '그날이 되었을 때' → '그날이 하였을 때' (자연스러움) ✓\n"
+                        "  예: '선생님이 되고 싶어' → '선생님이 하고 싶어' (자연스러움) ✓\n"
                         "- '되'는 동사로 쓰일 때 사용해요: '의사가 되고 싶어요'\n"
                         "- **중요:** '안되'는 문법적으로 완전히 틀린 표현이에요. 절대 사용하면 안 됩니다.\n"
                         "  올바른 표현: '안 돼' 또는 '안돼' (띄어쓰기 여부는 맥락에 따라 다름)\n"
@@ -1019,8 +1064,76 @@ else:
                         "- '아니하다'의 준말은 '않다'예요.\n"
                         "- 예: '숙제를 아직 안 했다' (안 했다), '미안하지도 않니?' (아니하니)\n"
                         "- '안'은 부정을 나타낼 때, '않'은 '않다' 동사 형태로 쓸 때 사용해요.\n"
+                        "\n6. **띄어쓰기 규칙:**\n"
+                        "- 조사는 앞 단어와 붙여 써요: '학교에', '친구와', '책을'\n"
+                        "- 의존 명사는 띄어 써요: '것', '수', '지', '뿐' 등\n"
+                        "- 보조 동사는 띄어 써요: '먹어 보다', '읽어 주다', '가고 싶다'\n"
+                        "- 단위를 나타내는 말은 띄어 써요: '한 개', '두 마리', '세 명'\n"
+                        "\n7. **조사 규칙:**\n"
+                        "- 주격 조사: '이/가' - 주어를 나타낼 때 사용\n"
+                        "- 목적격 조사: '을/를' - 목적어를 나타낼 때 사용\n"
+                        "- 부사격 조사: '에', '에서', '에게', '한테' 등 - 장소, 방향, 대상 등을 나타낼 때 사용\n"
+                        "- 보조사: '은/는', '도', '만', '까지' 등 - 특별한 의미를 더할 때 사용\n"
+                        "\n8. **어미 규칙:**\n"
+                        "- 종결 어미: 문장을 끝맺을 때 사용 - '~어요', '~아요', '~습니다', '~다'\n"
+                        "- 연결 어미: 문장을 이어줄 때 사용 - '~고', '~지만', '~어서', '~니까'\n"
+                        "- 전성 어미: 동사/형용사를 명사/관형사/부사로 바꿀 때 사용 - '~기', '~는', '~게'\n"
+                        "\n9. **준말 규칙:**\n"
+                        "- '되어' → '돼', '되어서' → '돼서'\n"
+                        "- '아니' → '안', '아니하다' → '않다'\n"
+                        "- '어떠하게' → '어떻게', '어떻게 해' → '어떡해'\n"
+                        "- 준말을 사용할 때는 원래 형태를 확인해서 올바르게 써야 해요.\n"
+                        "\n10. **받침 규칙:**\n"
+                        "- 받침이 있는 단어 뒤에는 '이에요', 받침이 없는 단어 뒤에는 '예요'\n"
+                        "- 받침이 있는 단어 뒤에는 '이', 받침이 없는 단어 뒤에는 '가'\n"
+                        "- 받침이 있는 단어 뒤에는 '을', 받침이 없는 단어 뒤에는 '를'\n"
+                        "- 받침이 있는 단어 뒤에는 '은', 받침이 없는 단어 뒤에는 '는'\n"
+                        "\n11. **높임법 규칙:**\n"
+                        "- 해요체: '~어요', '~아요' - 친근하고 정중한 말투\n"
+                        "- 해라체: '~다', '~어라' - 평서문, 명령문\n"
+                        "- 하십시오체: '~습니다', '~십시오' - 매우 정중한 말투\n"
+                        "- 하게체: '~네', '~게' - 구어체, 친근한 말투\n"
+                        "\n12. **부정 표현 규칙:**\n"
+                        "- '안' + 동사/형용사: '안 가다', '안 좋다'\n"
+                        "- '~지 않다': '가지 않다', '좋지 않다'\n"
+                        "- '못' + 동사: 능력이나 가능성의 부정 - '못 가다', '못 하다'\n"
+                        "- '~지 못하다': '가지 못하다', '하지 못하다'\n"
+                        "\n13. **시제 규칙:**\n"
+                        "- 현재: 동사/형용사 원형 또는 '~어요', '~아요'\n"
+                        "- 과거: '~었어요', '~았어요', '~였어요'\n"
+                        "- 미래: '~을 거예요', '~ㄹ 거예요', '~겠어요'\n"
+                        "\n14. **피동/사동 규칙:**\n"
+                        "- 피동: '~이/히/리/기' - '먹이다', '읽히다', '열리다', '움직이다'\n"
+                        "- 사동: '~이/히/리/기/우/추' - '먹이다', '읽히다', '열리다', '움직이다', '앉히다', '돕다' → '돕히다'\n"
+                        "\n15. **복수 표시 규칙:**\n"
+                        "- 한국어는 복수를 나타낼 때 '들'을 붙여요: '친구들', '책들', '학생들'\n"
+                        "- 하지만 단수와 복수를 구분하지 않아도 되는 경우가 많아요\n"
+                        "- '들'은 사람이나 동물에 주로 사용되고, 사물에는 잘 사용하지 않아요\n"
+                        "\n16. **의문문 규칙:**\n"
+                        "- 의문사 의문문: '누가', '무엇을', '어디에', '언제', '왜', '어떻게' 등\n"
+                        "- 예/아니 의문문: 문장 끝에 '~어요?', '~아요?', '~나요?' 등을 붙여요\n"
+                        "- 선택 의문문: '~을까/를까', '~을래/를래' 등을 사용해요\n"
+                        "\n17. **존댓말 규칙:**\n"
+                        "- 주체 높임: '~시다', '~세요', '~십시오' - 주어를 높일 때\n"
+                        "- 상대 높임: '~어요', '~아요', '~습니다' - 듣는 이를 높일 때\n"
+                        "- 객체 높임: '~께', '~께서', '~드리다' - 대상을 높일 때\n"
+                        "\n18. **부사 규칙:**\n"
+                        "- 상태 부사: '빠르게', '천천히', '조용히' - 동작의 상태를 나타냄\n"
+                        "- 정도 부사: '매우', '아주', '너무', '조금' - 정도를 나타냄\n"
+                        "- 시간 부사: '오늘', '어제', '내일', '지금', '곧' - 시간을 나타냄\n"
+                        "- 빈도 부사: '항상', '자주', '가끔', '때때로' - 빈도를 나타냄\n"
+                        "\n19. **관형사 규칙:**\n"
+                        "- 관형사는 명사 앞에서 명사를 꾸며주는 말이에요\n"
+                        "- '이', '그', '저' - 지시 관형사\n"
+                        "- '어떤', '무슨', '어느' - 의문 관형사\n"
+                        "- '새', '옛', '온' - 성상 관형사\n"
+                        "\n20. **의성어/의태어 규칙:**\n"
+                        "- 의성어: 소리를 흉내 낸 말 - '멍멍', '야옹', '똑똑', '철썩'\n"
+                        "- 의태어: 모양이나 움직임을 흉내 낸 말 - '반짝반짝', '펄럭펄럭', '두근두근'\n"
+                        "- 의성어/의태어는 주로 '~하다'와 함께 사용돼요: '멍멍하다', '반짝반짝하다'\n"
                         "\n답변은 간결하고 핵심만 전달해줘. 불필요하게 길게 설명하지 말고, 질문에 대한 핵심 답변만 명확하게 해줘. "
-                        "위의 문법 규칙들을 정확하게 기억하고, 틀린 답변을 절대 하지 말아야 해."
+                        "위의 모든 문법 규칙들을 정확하게 기억하고, 틀린 답변을 절대 하지 말아야 해. "
+                        "사용자가 틀린 표현을 물어보면 반드시 '문법적으로 옳지 않아요.'라고 먼저 말하고 올바른 표현을 설명해줘."
                     )
                     
                     # API 요청 페이로드 구성
