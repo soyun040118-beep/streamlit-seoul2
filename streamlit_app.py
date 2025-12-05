@@ -314,6 +314,26 @@ with st.sidebar:
         st.success("API 키가 준비됐어요! 🤖")
     else:
         st.warning("API 키가 필요해요! 🔑")
+    
+    # AI 대화 규칙
+    st.markdown("---")
+    st.markdown("### 🤖 AI 챗봇 사용 규칙")
+    with st.container(border=True):
+        st.markdown("""
+        **디지털 윤리를 지켜요!** 📚
+        
+        ✅ **해야 할 것:**
+        - 궁금한 내용만 간결하고 명료하게 물어보기
+        - 정중하고 예의 바른 말투 사용하기
+        - 문법과 맞춤법 질문에 집중하기
+        
+        ❌ **하지 말아야 할 것:**
+        - 욕설이나 비속어 사용 금지
+        - 타인을 비방하거나 모욕하는 말 사용 금지
+        - 개인정보나 불필요한 정보 공유 금지
+        
+        💡 **팁:** 질문을 구체적으로 하면 더 정확한 답변을 받을 수 있어요!
+        """)
 
 st.title("👨‍🏫 알쏭달쏭 문법 교실 🤖")
 st.write("평소에 친구들과 대화할 때 알쏭달쏭한 문법이 있지는 않았나요? 규칙을 익히고 퀴즈를 풀며 문법 실력을 키워봐요!")
@@ -499,6 +519,8 @@ with st.container(border=True):
                         st.session_state[f"auto_next_question_{question_id}"] = True
                         st.session_state[f"auto_next_timer_{question_id}"] = time.time()
                         st.session_state[f"auto_next_delay_{question_id}"] = 2.0  # 2초 딜레이 (풍선을 보여주기 위해)
+                        # 폼 안에서 즉시 정답 피드백 표시
+                        st.success("🎉 정답입니다!")
                     else:
                         st.session_state.answer_feedback = "incorrect"
                         st.session_state.answer_feedback_question_id = question_id
@@ -519,6 +541,8 @@ with st.container(border=True):
                         st.session_state[f"auto_next_question_{question_id}"] = True
                         st.session_state[f"auto_next_timer_{question_id}"] = time.time()
                         st.session_state[f"auto_next_delay_{question_id}"] = 3.0
+                        # 폼 안에서 즉시 오답 피드백 표시
+                        st.error(f"❌ 아쉬워요, 정답은 **'{question_data['정답']}'** 입니다.")
                     
                     # 폼 제출 후 즉시 rerun하여 피드백 표시
                     st.rerun()
@@ -868,7 +892,22 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.caption("안녕하세요! 저는 문법을 마스터한 초등학생이에요. 맞춤법과 문법에 대해 친절하고 정확하게 설명해드릴게요! 💬")
+# 챗봇 소개 문구 (눈에 띄게 표시)
+with st.container(border=True):
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                padding: 20px; 
+                border-radius: 10px; 
+                color: white; 
+                text-align: center;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+        <h3 style="color: white; margin: 0;">🤖 문법 마스터 챗봇</h3>
+        <p style="color: white; font-size: 1.1em; margin: 10px 0 0 0;">
+            안녕하세요! 저는 문법을 마스터한 초등학생이에요.<br>
+            맞춤법과 문법에 대해 친절하고 정확하게 설명해드릴게요! 💬
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
 
 # API 키 확인
 if not GOOGLE_API_KEY or GOOGLE_API_KEY == "여기에 실제 구글 API 키를 입력하세요":
@@ -949,7 +988,33 @@ else:
                         "사용자의 맞춤법과 문법 질문에 대해 정확하고 전문적으로 답변해야 해. "
                         "말투는 친절하고 정중하게 하되, 문법 설명은 정확하고 전문적으로 해줘. "
                         "'~예요', '~입니다' 같은 정중한 말투를 사용하고, 문법 규칙을 명확하게 설명해줘. "
-                        "틀린 답변을 절대 하지 말고, 한국어 문법 규칙을 정확하게 설명해야 해."
+                        "틀린 답변을 절대 하지 말고, 한국어 문법 규칙을 정확하게 설명해야 해. "
+                        "\n\n**중요한 문법 규칙 (반드시 정확하게 지켜야 함):**\n"
+                        "\n1. **에요/예요 규칙:**\n"
+                        "- 받침이 있으면 '이에요', 받침이 없으면 '예요'를 써요.\n"
+                        "- 예: '학생이에요' (받침 있음), '사과예요' (받침 없음)\n"
+                        "- **중요 예외:** '아니다'는 무조건 '아니에요'가 맞아요. '아니예요'는 틀린 표현이에요.\n"
+                        "- '아니다'는 받침이 없지만 예외적으로 항상 '아니에요'를 사용해요.\n"
+                        "\n2. **데/대 규칙:**\n"
+                        "- '데'는 직접 경험한 사실을 말할 때 사용해요.\n"
+                        "- '대'는 다른 사람에게 들은 내용을 전달할 때 사용해요.\n"
+                        "- 예: '친구가 오늘 시험이래' (들은 내용), '이제 가 보니 정말 좋대' (간접 경험)\n"
+                        "\n3. **어떡해/어떻게 규칙:**\n"
+                        "- '어떻게'는 '어떠하게'의 준말로 방법을 물을 때 써요.\n"
+                        "- '어떡해'는 '어떻게 해'의 준말로 걱정되는 상황에서 사용해요.\n"
+                        "- 예: '이 문제를 어떻게 풀지?' (방법), '지갑을 잃어버렸어. 어떡해!' (걱정)\n"
+                        "\n4. **되/돼 규칙:**\n"
+                        "- '되어'의 준말이 '돼'예요.\n"
+                        "- '되어'를 넣어 말이 되면 '돼'를 쓸 수 있어요.\n"
+                        "- 예: '그러면 안 돼' (안 되어), '이제 가도 되나요?' (가도 되나요?)\n"
+                        "- '되'는 동사로 쓰일 때 사용해요: '의사가 되고 싶어요'\n"
+                        "\n5. **안/않 규칙:**\n"
+                        "- '아니'의 준말이 '안'이에요.\n"
+                        "- '아니하다'의 준말은 '않다'예요.\n"
+                        "- 예: '숙제를 아직 안 했다' (안 했다), '미안하지도 않니?' (아니하니)\n"
+                        "- '안'은 부정을 나타낼 때, '않'은 '않다' 동사 형태로 쓸 때 사용해요.\n"
+                        "\n답변은 간결하고 핵심만 전달해줘. 불필요하게 길게 설명하지 말고, 질문에 대한 핵심 답변만 명확하게 해줘. "
+                        "위의 문법 규칙들을 정확하게 기억하고, 틀린 답변을 절대 하지 말아야 해."
                     )
                     
                     # API 요청 페이로드 구성
@@ -960,9 +1025,10 @@ else:
                             *conversation_history
                         ],
                         "generationConfig": {
-                            "temperature": 0.7,
-                            "topP": 1,
-                            "topK": 1,
+                            "temperature": 0.3,  # 더 일관된 답변을 위해 낮춤
+                            "topP": 0.8,
+                            "topK": 20,
+                            "maxOutputTokens": 500,  # 응답 길이 제한으로 빠른 응답
                         },
                         "safetySettings": [
                             {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
