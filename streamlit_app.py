@@ -138,16 +138,30 @@ def get_available_models():
         except:
             continue
     
-    # 모델 목록을 가져오지 못한 경우 기본 모델 사용
+    # 모델 목록을 가져오지 못한 경우 기본 모델 사용 (우선순위 순서)
     if not available_models:
         available_models = [
+            # v1beta API 우선 (더 안정적이고 널리 지원됨)
             ("v1beta", "gemini-pro"),
-            ("v1", "gemini-pro"),
-            ("v1beta", "gemini-1.5-pro"),
-            ("v1", "gemini-1.5-pro"),
             ("v1beta", "gemini-1.5-flash"),
-            ("v1", "gemini-1.5-flash"),
+            ("v1beta", "gemini-1.5-pro"),
+            # v1 API는 나중에 시도 (일부 모델만 지원)
+            ("v1", "gemini-pro"),
         ]
+    else:
+        # 가져온 모델 목록을 우선순위에 따라 정렬
+        # gemini-pro를 가장 먼저 시도하도록
+        priority_order = ["gemini-pro", "gemini-1.5-flash", "gemini-1.5-pro"]
+        sorted_models = []
+        for priority_model in priority_order:
+            for api_version, model_name in available_models:
+                if model_name == priority_model and (api_version, model_name) not in sorted_models:
+                    sorted_models.append((api_version, model_name))
+        # 나머지 모델 추가
+        for api_version, model_name in available_models:
+            if (api_version, model_name) not in sorted_models:
+                sorted_models.append((api_version, model_name))
+        available_models = sorted_models if sorted_models else available_models
     
     return available_models
 
@@ -161,13 +175,14 @@ def stream_gemini_response(payload):
     """Gemini API로부터 스트리밍 응답을 받아 텍스트 청크를 yield합니다."""
     last_error = None
     last_status_code = None
-    last_model = None
+    tried_models = []
     
     for api_version, model_name in API_CONFIGS:
         # 스트리밍을 지원하는 streamGenerateContent 엔드포인트 사용
         api_url = f"https://generativelanguage.googleapis.com/{api_version}/models/{model_name}:streamGenerateContent"
         params = {"key": GOOGLE_API_KEY, "alt": "sse"}
-        last_model = f"{api_version}/{model_name}"
+        current_model = f"{api_version}/{model_name}"
+        tried_models.append(current_model)
         
         try:
             # stream=True로 요청을 보내고, 응답을 순회합니다.
@@ -221,16 +236,27 @@ def stream_gemini_response(payload):
             error_msg += "1. Google Cloud Console에서 Gemini API가 활성화되어 있는지 확인해주세요.\n"
             error_msg += "2. API 키가 올바른지 확인해주세요.\n"
             error_msg += "3. API 키에 필요한 권한이 부여되어 있는지 확인해주세요.\n"
-            error_msg += f"4. 시도한 모델: {last_model}\n\n"
+            if tried_models:
+                error_msg += f"4. 시도한 모델들: {', '.join(tried_models)}\n\n"
         elif last_status_code == 404:
             error_msg += f"**404 Not Found 오류:** 모델을 찾을 수 없어요.\n\n"
-            error_msg += f"시도한 모델: {last_model}\n\n"
+            if tried_models:
+                error_msg += f"**시도한 모델들:**\n"
+                for model in tried_models:
+                    error_msg += f"- {model}\n"
+                error_msg += "\n"
+            error_msg += "**해결 방법:**\n"
+            error_msg += "1. API 키가 올바른지 확인해주세요.\n"
+            error_msg += "2. Google Cloud Console에서 Gemini API가 활성화되어 있는지 확인해주세요.\n"
+            error_msg += "3. 사용 가능한 모델 목록을 확인해주세요.\n\n"
         else:
             error_msg += f"**오류 상세:** {last_error}\n\n"
             if last_status_code:
                 error_msg += f"HTTP 상태 코드: {last_status_code}\n"
+            if tried_models:
+                error_msg += f"시도한 모델들: {', '.join(tried_models)}\n"
         
-        error_msg += "다시 시도해주시거나, API 키 설정을 확인해주세요."
+        error_msg += "\n다시 시도해주시거나, API 키 설정을 확인해주세요."
         yield error_msg
 
 # --- 1. 앱 기본 설정 및 세션 상태 초기화 ---
@@ -238,7 +264,7 @@ st.set_page_config(layout="wide")
 
 # --- 사이드바 마스코트 ---
 with st.sidebar:
-    st.info("안녕하세요! 저는 맞춤법 요정 '맞춤이'에요. 함께 즐겁게 문법을 배워봐요! ✨")
+    st.info("안녕하세요. 저는 맞춤법 해결사예요! 함께 즐겁게 문법을 배워봐요! ✨")
     
     # API 키 로드 상태 표시
     st.markdown("---")
