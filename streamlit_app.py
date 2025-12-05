@@ -495,10 +495,10 @@ with st.container(border=True):
                         st.session_state.answer_feedback_question_id = question_id
                         if st.session_state.retry_mode:
                             st.session_state.incorrect_questions[st.session_state.current_retry_index] = None
-                        # 정답일 때 풍선 표시 후 빠르게 다음 문제로 이동 (1.5초 후)
+                        # 정답일 때 풍선 표시 후 빠르게 다음 문제로 이동 (2초 후)
                         st.session_state[f"auto_next_question_{question_id}"] = True
                         st.session_state[f"auto_next_timer_{question_id}"] = time.time()
-                        st.session_state[f"auto_next_delay_{question_id}"] = 1.5  # 1.5초 딜레이 (풍선을 보여주기 위해)
+                        st.session_state[f"auto_next_delay_{question_id}"] = 2.0  # 2초 딜레이 (풍선을 보여주기 위해)
                     else:
                         st.session_state.answer_feedback = "incorrect"
                         st.session_state.answer_feedback_question_id = question_id
@@ -518,11 +518,20 @@ with st.container(border=True):
                         # 오답일 때도 자동으로 다음 문제로 이동 (3초 후)
                         st.session_state[f"auto_next_question_{question_id}"] = True
                         st.session_state[f"auto_next_timer_{question_id}"] = time.time()
+                        st.session_state[f"auto_next_delay_{question_id}"] = 3.0
+                    
+                    # 폼 제출 후 즉시 rerun하여 피드백 표시
+                    st.rerun()
 
         # 정답 제출 후 피드백 표시 (같은 문제에 대해서만)
         feedback_question_id = st.session_state.get('answer_feedback_question_id', None)
-        if is_submitted and feedback_question_id == question_id:
-            if st.session_state.get('answer_feedback') == "correct":
+        # is_submitted를 다시 확인 (폼 제출 후 업데이트되었을 수 있음)
+        current_is_submitted = st.session_state.get(f"is_submitted_{question_id}", False)
+        
+        if current_is_submitted and feedback_question_id == question_id:
+            feedback_type = st.session_state.get('answer_feedback', None)
+            
+            if feedback_type == "correct":
                 st.success("🎉 정답입니다!")
                 st.balloons()
                 # 정답일 때 빠르게 다음 문제로 넘어가기
@@ -535,7 +544,7 @@ with st.container(border=True):
                     current_time = time.time()
                     start_time = st.session_state.get(timer_key, current_time)
                     elapsed = current_time - start_time
-                    delay = st.session_state.get(delay_key, 1.5)
+                    delay = st.session_state.get(delay_key, 2.0)
                     
                     if elapsed >= delay:
                         # 시간이 지나면 다음 문제로 이동
@@ -560,7 +569,7 @@ with st.container(border=True):
                             st.info(f"⏱️ {int(remaining) + 1}초 후 자동으로 다음 문제로 넘어갑니다...")
                         # 자동으로 다시 렌더링하여 타이머 업데이트
                         st.rerun()
-            elif st.session_state.answer_feedback == "incorrect":
+            elif feedback_type == "incorrect":
                 st.error(f"❌ 아쉬워요, 정답은 **'{question_data['정답']}'** 입니다.")
                 if submitted_answer:
                     st.warning(f"선택하신 답: **'{submitted_answer}'**")
@@ -576,21 +585,37 @@ with st.container(border=True):
                 # 자동으로 다음 문제로 넘어가기 (3초 후)
                 auto_next_key = f"auto_next_question_{question_id}"
                 timer_key = f"auto_next_timer_{question_id}"
+                delay_key = f"auto_next_delay_{question_id}"
+                
                 if st.session_state.get(auto_next_key, False):
-                    elapsed = time.time() - st.session_state.get(timer_key, time.time())
-                    remaining = max(0, 3 - int(elapsed))
-                    if remaining > 0:
-                        st.info(f"⏱️ {remaining}초 후 자동으로 다음 문제로 넘어갑니다...")
-                        # 자동으로 다시 렌더링하여 카운트다운 업데이트
-                        st.rerun()
-                    else:
+                    current_time = time.time()
+                    start_time = st.session_state.get(timer_key, current_time)
+                    elapsed = current_time - start_time
+                    delay = st.session_state.get(delay_key, 3.0)
+                    
+                    if elapsed >= delay:
                         # 시간이 지나면 다음 문제로 이동
                         st.session_state[f"is_submitted_{question_id}"] = False
                         st.session_state[f"submitted_answer_{question_id}"] = None
                         st.session_state[auto_next_key] = False
                         if timer_key in st.session_state:
                             del st.session_state[timer_key]
+                        if delay_key in st.session_state:
+                            del st.session_state[delay_key]
+                        # 피드백 상태 초기화
+                        if 'answer_feedback' in st.session_state:
+                            del st.session_state['answer_feedback']
+                        if 'answer_feedback_question_id' in st.session_state:
+                            del st.session_state['answer_feedback_question_id']
                         generate_question(st.session_state.retry_mode)
+                        st.rerun()
+                    else:
+                        # 아직 시간이 안 지났으면 잠시 후 다시 렌더링
+                        remaining = delay - elapsed
+                        if remaining > 0.1:
+                            st.info(f"⏱️ {int(remaining) + 1}초 후 자동으로 다음 문제로 넘어갑니다...")
+                        # 자동으로 다시 렌더링하여 카운트다운 업데이트
+                        time.sleep(0.1)  # 짧은 딜레이 후 rerun
                         st.rerun()
 
 # --- 6. 오답 유형 분석 및 추천 ---
@@ -843,7 +868,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.caption("나는 문법을 마스터한 초등학생이야! 뭐든지 물어봐!")
+st.caption("안녕하세요! 저는 문법을 마스터한 초등학생이에요. 맞춤법과 문법에 대해 친절하고 정확하게 설명해드릴게요! 💬")
 
 # API 키 확인
 if not GOOGLE_API_KEY or GOOGLE_API_KEY == "여기에 실제 구글 API 키를 입력하세요":
@@ -920,16 +945,18 @@ else:
     
                     # 마지막 사용자 메시지 앞에 페르소나 프롬프트 추가
                     system_prompt = (
-                        "너는 문법을 완벽하게 마스터한 똑똑한 초등학생이야. "
-                        "사용자의 질문에 대해, 맞춤법과 문법을 친절하고 상세하게 설명해줘. "
-                        "항상 밝고 명랑한 초등학생 말투를 사용해줘. 예를 들어, '~했어!', '~야!', '~거든!' 같은 말투를 사용해봐."
+                        "너는 문법을 완벽하게 마스터한 초등학생이야. "
+                        "사용자의 맞춤법과 문법 질문에 대해 정확하고 전문적으로 답변해야 해. "
+                        "말투는 친절하고 정중하게 하되, 문법 설명은 정확하고 전문적으로 해줘. "
+                        "'~예요', '~입니다' 같은 정중한 말투를 사용하고, 문법 규칙을 명확하게 설명해줘. "
+                        "틀린 답변을 절대 하지 말고, 한국어 문법 규칙을 정확하게 설명해야 해."
                     )
                     
                     # API 요청 페이로드 구성
                     payload = {
                         "contents": [
                             {"role": "user", "parts": [{"text": system_prompt}]},
-                            {"role": "model", "parts": [{"text": "응, 알겠어! 이제부터 나는 문법을 마스터한 초등학생이야! 뭐든지 물어봐!"}]},
+                            {"role": "model", "parts": [{"text": "안녕하세요! 저는 문법을 마스터한 초등학생이에요. 맞춤법과 문법에 대해 친절하고 정확하게 설명해드릴게요. 무엇이 궁금하신가요?"}]},
                             *conversation_history
                         ],
                         "generationConfig": {
