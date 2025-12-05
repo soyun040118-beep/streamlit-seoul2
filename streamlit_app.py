@@ -120,8 +120,8 @@ def get_available_models():
                     for model in data["models"]:
                         model_name = model.get("name", "")
                         supported_methods = model.get("supportedGenerationMethods", [])
-                        # streamGenerateContent를 지원하는 모델만 추가
-                        if "streamGenerateContent" in supported_methods:
+                        # streamGenerateContent 또는 generateContent를 지원하는 모델 추가
+                        if "streamGenerateContent" in supported_methods or "generateContent" in supported_methods:
                             # 모델 이름에서 버전 추출 (예: "models/gemini-pro" -> "gemini-pro")
                             if "/" in model_name:
                                 short_name = model_name.split("/")[-1]
@@ -178,53 +178,85 @@ def stream_gemini_response(payload):
     tried_models = []
     
     for api_version, model_name in API_CONFIGS:
-        # 스트리밍을 지원하는 streamGenerateContent 엔드포인트 사용
-        api_url = f"https://generativelanguage.googleapis.com/{api_version}/models/{model_name}:streamGenerateContent"
-        params = {"key": GOOGLE_API_KEY, "alt": "sse"}
-        current_model = f"{api_version}/{model_name}"
-        tried_models.append(current_model)
+        # 먼저 streamGenerateContent 시도, 실패하면 generateContent 시도
+        endpoints = [
+            ("streamGenerateContent", True),  # 스트리밍
+            ("generateContent", False)  # 비스트리밍
+        ]
         
-        try:
-            # stream=True로 요청을 보내고, 응답을 순회합니다.
-            with requests.post(api_url, params=params, headers={"Content-Type": "application/json"}, json=payload, stream=True, timeout=60) as response:
-                response.raise_for_status()
-                for chunk in response.iter_lines():
-                    if chunk:
-                        decoded_chunk = chunk.decode('utf-8')
-                        if decoded_chunk.startswith('data: '):
-                            try:
-                                data = json.loads(decoded_chunk[6:])
-                                if "candidates" in data and len(data["candidates"]) > 0:
-                                    candidate = data["candidates"][0]
-                                    if "content" in candidate and "parts" in candidate["content"]:
-                                        yield candidate["content"]["parts"][0]["text"]
-                            except json.JSONDecodeError:
-                                continue # 가끔 빈 data 청크나 잘못된 JSON이 올 수 있음
-                return # 성공적으로 스트리밍이 끝나면 함수 종료
-        except requests.exceptions.HTTPError as e:
-            last_error = e
-            last_status_code = e.response.status_code
+        for endpoint_name, is_streaming in endpoints:
+            api_url = f"https://generativelanguage.googleapis.com/{api_version}/models/{model_name}:{endpoint_name}"
+            current_model = f"{api_version}/{model_name} ({endpoint_name})"
             
-            # 오류 응답 본문 확인
-            error_detail = ""
+            if current_model not in tried_models:
+                tried_models.append(current_model)
+            
             try:
-                error_data = e.response.json()
-                if "error" in error_data:
-                    error_detail = error_data["error"].get("message", "")
-            except:
-                pass
-            
-            if e.response.status_code == 404:
-                continue # 404 오류 시 다음 모델 시도
-            elif e.response.status_code == 403:
-                # 403 오류도 다른 모델 시도
+                if is_streaming:
+                    # 스트리밍 엔드포인트
+                    params = {"key": GOOGLE_API_KEY, "alt": "sse"}
+                    with requests.post(api_url, params=params, headers={"Content-Type": "application/json"}, json=payload, stream=True, timeout=60) as response:
+                        response.raise_for_status()
+                        for chunk in response.iter_lines():
+                            if chunk:
+                                decoded_chunk = chunk.decode('utf-8')
+                                if decoded_chunk.startswith('data: '):
+                                    try:
+                                        data = json.loads(decoded_chunk[6:])
+                                        if "candidates" in data and len(data["candidates"]) > 0:
+                                            candidate = data["candidates"][0]
+                                            if "content" in candidate and "parts" in candidate["content"]:
+                                                yield candidate["content"]["parts"][0]["text"]
+                                    except json.JSONDecodeError:
+                                        continue
+                        return # 성공적으로 스트리밍이 끝나면 함수 종료
+                else:
+                    # 비스트리밍 엔드포인트
+                    params = {"key": GOOGLE_API_KEY}
+                    response = requests.post(api_url, params=params, headers={"Content-Type": "application/json"}, json=payload, timeout=60)
+                    response.raise_for_status()
+                    data = response.json()
+                    if "candidates" in data and len(data["candidates"]) > 0:
+                        candidate = data["candidates"][0]
+                        if "content" in candidate and "parts" in candidate["content"]:
+                            text = candidate["content"]["parts"][0]["text"]
+                            # 비스트리밍이므로 전체 텍스트를 한 번에 yield
+                            yield text
+                            return
+            except requests.exceptions.HTTPError as e:
+                last_error = e
+                last_status_code = e.response.status_code
+                
+                # 오류 응답 본문 확인
+                error_detail = ""
+                try:
+                    error_data = e.response.json()
+                    if "error" in error_data:
+                        error_detail = error_data["error"].get("message", "")
+                except:
+                    pass
+                
+                if e.response.status_code == 404:
+                    # 404 오류 시 다음 엔드포인트 또는 모델 시도
+                    if not is_streaming:
+                        # generateContent도 실패했으면 다음 모델로
+                        break
+                    continue
+                elif e.response.status_code == 403:
+                    # 403 오류도 다음 엔드포인트 또는 모델 시도
+                    if not is_streaming:
+                        break
+                    continue
+                else:
+                    # 다른 HTTP 오류는 다음 엔드포인트 또는 모델 시도
+                    if not is_streaming:
+                        break
+                    continue
+            except Exception as exc:
+                last_error = exc
+                if not is_streaming:
+                    break
                 continue
-            else:
-                # 다른 HTTP 오류는 다음 모델 시도
-                continue
-        except Exception as exc:
-            last_error = exc
-            continue
     
     # 모든 시도가 실패한 경우
     if last_error:
@@ -811,11 +843,6 @@ else:
     if "chat_messages" not in st.session_state:
         st.session_state.chat_messages = []
     
-    # 사이드바에 '새 대화 시작' 버튼 추가
-    with st.sidebar:
-        if st.button("🗑️ 챗봇 대화 초기화", use_container_width=True):
-            st.session_state.chat_messages = []
-            st.rerun()
     
     # 대화 기록 컨테이너
     chat_container = st.container()
