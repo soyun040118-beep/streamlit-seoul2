@@ -316,6 +316,12 @@ with st.container(border=True):
                             incorrect_q = question_data.copy()
                             incorrect_q['user_wrong_answer'] = user_answer
                             st.session_state.incorrect_questions.append(incorrect_q)
+                        # 오답일 때도 자동으로 다음 문제로 이동
+                        time.sleep(2)  # 2초 대기 (오답 피드백 확인 시간)
+                        st.session_state[f"is_submitted_{question_id}"] = False
+                        st.session_state[f"submitted_answer_{question_id}"] = None
+                        generate_question(st.session_state.retry_mode)
+                        st.rerun()
 
         # 정답 제출 후 피드백 표시 (같은 문제에 대해서만)
         if is_submitted and st.session_state.get('answer_feedback_question_id') == question_id:
