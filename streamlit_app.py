@@ -5,6 +5,9 @@ import time
 import os
 from dotenv import load_dotenv
 import numpy as np
+import json
+import requests
+from datetime import datetime
 
 # --- 데이터 로드 함수 ---
 def get_grammar_data():
@@ -100,6 +103,87 @@ try:
 except:
     # 폴백: 환경 변수에서 직접 가져오기
     GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+
+# --- 챗봇 관련 함수들 ---
+def get_available_models():
+    """사용 가능한 모델 목록을 가져옵니다."""
+    available_models = []
+    
+    # v1beta API로 모델 목록 조회 시도
+    for api_version in ["v1beta", "v1"]:
+        try:
+            list_url = f"https://generativelanguage.googleapis.com/{api_version}/models?key={GOOGLE_API_KEY}"
+            response = requests.get(list_url, timeout=10)
+            if response.status_code == 200:
+                data = response.json()
+                if "models" in data:
+                    for model in data["models"]:
+                        model_name = model.get("name", "")
+                        supported_methods = model.get("supportedGenerationMethods", [])
+                        # streamGenerateContent를 지원하는 모델만 추가
+                        if "streamGenerateContent" in supported_methods:
+                            # 모델 이름에서 버전 추출 (예: "models/gemini-pro" -> "gemini-pro")
+                            if "/" in model_name:
+                                short_name = model_name.split("/")[-1]
+                                available_models.append((api_version, short_name))
+                    if available_models:
+                        break
+        except:
+            continue
+    
+    # 모델 목록을 가져오지 못한 경우 기본 모델 사용
+    if not available_models:
+        available_models = [
+            ("v1beta", "gemini-pro"),
+            ("v1", "gemini-pro"),
+        ]
+    
+    return available_models
+
+# 세션 상태에 모델 목록 저장 (한 번만 조회)
+if 'available_models' not in st.session_state:
+    st.session_state.available_models = get_available_models()
+
+API_CONFIGS = st.session_state.available_models
+
+def stream_gemini_response(payload):
+    """Gemini API로부터 스트리밍 응답을 받아 텍스트 청크를 yield합니다."""
+    last_error = None
+    for api_version, model_name in API_CONFIGS:
+        # 스트리밍을 지원하는 streamGenerateContent 엔드포인트 사용
+        api_url = f"https://generativelanguage.googleapis.com/{api_version}/models/{model_name}:streamGenerateContent"
+        params = {"key": GOOGLE_API_KEY, "alt": "sse"}
+        
+        try:
+            # stream=True로 요청을 보내고, 응답을 순회합니다.
+            with requests.post(api_url, params=params, headers={"Content-Type": "application/json"}, json=payload, stream=True, timeout=60) as response:
+                response.raise_for_status()
+                for chunk in response.iter_lines():
+                    if chunk:
+                        decoded_chunk = chunk.decode('utf-8')
+                        if decoded_chunk.startswith('data: '):
+                            try:
+                                data = json.loads(decoded_chunk[6:])
+                                if "candidates" in data and len(data["candidates"]) > 0:
+                                    candidate = data["candidates"][0]
+                                    if "content" in candidate and "parts" in candidate["content"]:
+                                        yield candidate["content"]["parts"][0]["text"]
+                            except json.JSONDecodeError:
+                                continue # 가끔 빈 data 청크나 잘못된 JSON이 올 수 있음
+                return # 성공적으로 스트리밍이 끝나면 함수 종료
+        except requests.exceptions.HTTPError as e:
+            last_error = e
+            if e.response.status_code == 404:
+                continue # 404 오류 시 다음 모델 시도
+            else:
+                break # 다른 HTTP 오류는 즉시 중단
+        except Exception as exc:
+            last_error = exc
+            break
+    
+    # 모든 시도가 실패한 경우
+    if last_error:
+        yield f"Gemini를 호출하는 데 실패했어요: {last_error}"
 
 # --- 1. 앱 기본 설정 및 세션 상태 초기화 ---
 st.set_page_config(layout="wide")
@@ -585,3 +669,214 @@ with st.container(border=True):
         st.success("🎉 축하합니다! 모든 규칙을 마스터했어요!")
     else:
         st.info("틀린 문제를 다시 확인하고 재도전해서 100점을 만들어봐요! 파이팅!")
+
+# --- 5. 문법 교정 챗봇 (SNS 스타일) ---
+st.markdown("---")
+st.subheader("🤖 문법 교정 챗봇")
+
+# SNS 스타일 CSS 추가
+st.markdown("""
+<style>
+    /* 사용자 메시지 스타일 (오른쪽) */
+    .user-message {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 15px;
+    }
+    
+    .user-bubble {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 12px 16px;
+        border-radius: 18px 18px 4px 18px;
+        max-width: 70%;
+        word-wrap: break-word;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        margin-left: auto;
+    }
+    
+    /* 챗봇 메시지 스타일 (왼쪽) */
+    .assistant-message {
+        display: flex;
+        justify-content: flex-start;
+        margin-bottom: 15px;
+    }
+    
+    .assistant-bubble {
+        background: white;
+        color: #333;
+        padding: 12px 16px;
+        border-radius: 18px 18px 18px 4px;
+        max-width: 70%;
+        word-wrap: break-word;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        border: 1px solid #e0e0e0;
+    }
+    
+    /* 시간 표시 */
+    .message-time {
+        font-size: 0.7em;
+        color: #999;
+        margin-top: 4px;
+        text-align: right;
+    }
+    
+    .assistant-time {
+        text-align: left;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+st.caption("나는 문법을 마스터한 초등학생이야! 뭐든지 물어봐!")
+
+# API 키 확인
+if not GOOGLE_API_KEY or GOOGLE_API_KEY == "여기에 실제 구글 API 키를 입력하세요":
+    st.error("앗! 구글 API 키가 설정되지 않았어요. .env 파일을 확인해주세요.")
+else:
+    # 세션 상태에 대화 기록 초기화
+    if "chat_messages" not in st.session_state:
+        st.session_state.chat_messages = []
+    
+    # 사이드바에 '새 대화 시작' 버튼 추가
+    with st.sidebar:
+        if st.button("🗑️ 챗봇 대화 초기화", use_container_width=True):
+            st.session_state.chat_messages = []
+            st.rerun()
+    
+    # 대화 기록 컨테이너
+    chat_container = st.container()
+    
+    # 이전 대화 기록 표시 (SNS 스타일)
+    with chat_container:
+        for idx, message in enumerate(st.session_state.chat_messages):
+            role = message["role"]
+            content = message["content"]
+            timestamp = message.get("timestamp", "")
+            
+            if role == "user":
+                # 사용자 메시지 (오른쪽)
+                st.markdown(f"""
+                <div class="user-message">
+                    <div class="user-bubble">
+                        {content}
+                        <div class="message-time">{timestamp}</div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                # 챗봇 메시지 (왼쪽)
+                st.markdown(f"""
+                <div class="assistant-message">
+                    <div class="assistant-bubble">
+                        {content}
+                        <div class="message-time assistant-time">{timestamp}</div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+    
+    # 사용자 입력을 위한 채팅 입력창
+    if prompt := st.chat_input("맞춤법이나 문법이 궁금한 문장을 입력해봐!"):
+        # 현재 시간 가져오기
+        current_time = datetime.now().strftime("%H:%M")
+        
+        # 사용자 메시지를 대화 기록에 추가하고 화면에 표시
+        user_message = {"role": "user", "content": prompt, "timestamp": current_time}
+        st.session_state.chat_messages.append(user_message)
+        
+        # 사용자 메시지 즉시 표시 (SNS 스타일)
+        with chat_container:
+            st.markdown(f"""
+            <div class="user-message">
+                <div class="user-bubble">
+                    {prompt}
+                    <div class="message-time">{current_time}</div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+    
+        # Gemini 응답 생성
+        with chat_container:
+            # 챗봇 응답 영역 생성
+            response_placeholder = st.empty()
+            
+            with response_placeholder.container():
+                with st.spinner("💭 생각 중..."):
+                    # 페르소나 설정 및 대화 기록을 API 요청 형식으로 변환
+                    conversation_history = []
+                    for msg in st.session_state.chat_messages:
+                        role = "model" if msg["role"] == "assistant" else "user"
+                        conversation_history.append({"role": role, "parts": [{"text": msg["content"]}]})
+    
+                    # 마지막 사용자 메시지 앞에 페르소나 프롬프트 추가
+                    system_prompt = (
+                        "너는 문법을 완벽하게 마스터한 똑똑한 초등학생이야. "
+                        "사용자의 질문에 대해, 맞춤법과 문법을 친절하고 상세하게 설명해줘. "
+                        "항상 밝고 명랑한 초등학생 말투를 사용해줘. 예를 들어, '~했어!', '~야!', '~거든!' 같은 말투를 사용해봐."
+                    )
+                    
+                    # API 요청 페이로드 구성
+                    payload = {
+                        "contents": [
+                            {"role": "user", "parts": [{"text": system_prompt}]},
+                            {"role": "model", "parts": [{"text": "응, 알겠어! 이제부터 나는 문법을 마스터한 초등학생이야! 뭐든지 물어봐!"}]},
+                            *conversation_history
+                        ],
+                        "generationConfig": {
+                            "temperature": 0.7,
+                            "topP": 1,
+                            "topK": 1,
+                        },
+                        "safetySettings": [
+                            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
+                            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
+                            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
+                            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
+                        ],
+                    }
+    
+                    try:
+                        # 스트리밍 응답을 수집
+                        response_stream = stream_gemini_response(payload)
+                        full_response = ""
+                        
+                        # 스트리밍 응답을 실시간으로 표시
+                        streaming_placeholder = st.empty()
+                        for chunk in response_stream:
+                            full_response += chunk
+                            # 실시간으로 업데이트되는 메시지 표시
+                            streaming_placeholder.markdown(f"""
+                            <div class="assistant-message">
+                                <div class="assistant-bubble">
+                                    {full_response}
+                                    <div class="message-time assistant-time">{current_time}</div>
+                                </div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                        
+                        # 최종 응답을 대화 기록에 추가
+                        if full_response:
+                            assistant_time = datetime.now().strftime("%H:%M")
+                            st.session_state.chat_messages.append({
+                                "role": "assistant", 
+                                "content": full_response,
+                                "timestamp": assistant_time
+                            })
+                            # 최종 메시지로 업데이트
+                            streaming_placeholder.markdown(f"""
+                            <div class="assistant-message">
+                                <div class="assistant-bubble">
+                                    {full_response}
+                                    <div class="message-time assistant-time">{assistant_time}</div>
+                                </div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                        else:
+                            # 스트림에서 아무것도 반환되지 않은 경우
+                            st.error("앗, 응답을 생성하지 못했어. 다시 시도해줄래?")
+                            st.session_state.chat_messages.pop() # 실패한 사용자 메시지 제거
+                    except Exception as e:
+                        error_message = f"스트리밍 중 오류가 발생했어요: {e}"
+                        st.error(error_message)
+                        # 실패한 경우, 마지막 사용자 메시지를 기록에서 제거하여 재시도할 수 있도록 함
+                        if st.session_state.chat_messages and st.session_state.chat_messages[-1]["role"] == "user":
+                            st.session_state.chat_messages.pop()
