@@ -128,6 +128,13 @@ def get_available_models():
                                 available_models.append((api_version, short_name))
                     if available_models:
                         break
+            elif response.status_code == 403:
+                # 403 오류 시 다음 API 버전 시도
+                continue
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 403:
+                # 403 오류 시 다음 API 버전 시도
+                continue
         except:
             continue
     
@@ -136,6 +143,10 @@ def get_available_models():
         available_models = [
             ("v1beta", "gemini-pro"),
             ("v1", "gemini-pro"),
+            ("v1beta", "gemini-1.5-pro"),
+            ("v1", "gemini-1.5-pro"),
+            ("v1beta", "gemini-1.5-flash"),
+            ("v1", "gemini-1.5-flash"),
         ]
     
     return available_models
@@ -149,10 +160,14 @@ API_CONFIGS = st.session_state.available_models
 def stream_gemini_response(payload):
     """Gemini API로부터 스트리밍 응답을 받아 텍스트 청크를 yield합니다."""
     last_error = None
+    last_status_code = None
+    last_model = None
+    
     for api_version, model_name in API_CONFIGS:
         # 스트리밍을 지원하는 streamGenerateContent 엔드포인트 사용
         api_url = f"https://generativelanguage.googleapis.com/{api_version}/models/{model_name}:streamGenerateContent"
         params = {"key": GOOGLE_API_KEY, "alt": "sse"}
+        last_model = f"{api_version}/{model_name}"
         
         try:
             # stream=True로 요청을 보내고, 응답을 순회합니다.
@@ -173,17 +188,50 @@ def stream_gemini_response(payload):
                 return # 성공적으로 스트리밍이 끝나면 함수 종료
         except requests.exceptions.HTTPError as e:
             last_error = e
+            last_status_code = e.response.status_code
+            
+            # 오류 응답 본문 확인
+            error_detail = ""
+            try:
+                error_data = e.response.json()
+                if "error" in error_data:
+                    error_detail = error_data["error"].get("message", "")
+            except:
+                pass
+            
             if e.response.status_code == 404:
                 continue # 404 오류 시 다음 모델 시도
+            elif e.response.status_code == 403:
+                # 403 오류도 다른 모델 시도
+                continue
             else:
-                break # 다른 HTTP 오류는 즉시 중단
+                # 다른 HTTP 오류는 다음 모델 시도
+                continue
         except Exception as exc:
             last_error = exc
-            break
+            continue
     
     # 모든 시도가 실패한 경우
     if last_error:
-        yield f"Gemini를 호출하는 데 실패했어요: {last_error}"
+        error_msg = f"**오류가 발생했어요!**\n\n"
+        
+        if last_status_code == 403:
+            error_msg += "**403 Forbidden 오류:** API 키에 문제가 있거나 접근 권한이 없어요.\n\n"
+            error_msg += "**해결 방법:**\n"
+            error_msg += "1. Google Cloud Console에서 Gemini API가 활성화되어 있는지 확인해주세요.\n"
+            error_msg += "2. API 키가 올바른지 확인해주세요.\n"
+            error_msg += "3. API 키에 필요한 권한이 부여되어 있는지 확인해주세요.\n"
+            error_msg += f"4. 시도한 모델: {last_model}\n\n"
+        elif last_status_code == 404:
+            error_msg += f"**404 Not Found 오류:** 모델을 찾을 수 없어요.\n\n"
+            error_msg += f"시도한 모델: {last_model}\n\n"
+        else:
+            error_msg += f"**오류 상세:** {last_error}\n\n"
+            if last_status_code:
+                error_msg += f"HTTP 상태 코드: {last_status_code}\n"
+        
+        error_msg += "다시 시도해주시거나, API 키 설정을 확인해주세요."
+        yield error_msg
 
 # --- 1. 앱 기본 설정 및 세션 상태 초기화 ---
 st.set_page_config(layout="wide")
