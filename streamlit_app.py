@@ -109,6 +109,10 @@ def get_available_models():
     """사용 가능한 모델 목록을 가져옵니다."""
     available_models = []
     
+    # API 키가 없으면 빈 리스트 반환
+    if not GOOGLE_API_KEY or GOOGLE_API_KEY == "여기에 실제 구글 API 키를 입력하세요":
+        return []
+    
     # v1beta API로 모델 목록 조회 시도
     for api_version in ["v1beta", "v1"]:
         try:
@@ -131,22 +135,25 @@ def get_available_models():
             elif response.status_code == 403:
                 # 403 오류 시 다음 API 버전 시도
                 continue
+            elif response.status_code == 404:
+                # 404 오류 시 다음 API 버전 시도
+                continue
         except requests.exceptions.HTTPError as e:
-            if e.response.status_code == 403:
-                # 403 오류 시 다음 API 버전 시도
+            if e.response.status_code in [403, 404]:
+                # 403, 404 오류 시 다음 API 버전 시도
                 continue
         except:
             continue
     
     # 모델 목록을 가져오지 못한 경우 기본 모델 사용 (우선순위 순서)
+    # 하지만 실제로는 API 키 문제일 수 있으므로 빈 리스트 반환 권장
     if not available_models:
+        # 기본 모델 목록 (실제로는 작동하지 않을 수 있음)
         available_models = [
             # v1beta API 우선 (더 안정적이고 널리 지원됨)
             ("v1beta", "gemini-pro"),
             ("v1beta", "gemini-1.5-flash"),
             ("v1beta", "gemini-1.5-pro"),
-            # v1 API는 나중에 시도 (일부 모델만 지원)
-            ("v1", "gemini-pro"),
         ]
     else:
         # 가져온 모델 목록을 우선순위에 따라 정렬
@@ -278,9 +285,12 @@ def stream_gemini_response(payload):
                     error_msg += f"- {model}\n"
                 error_msg += "\n"
             error_msg += "**해결 방법:**\n"
-            error_msg += "1. API 키가 올바른지 확인해주세요.\n"
-            error_msg += "2. Google Cloud Console에서 Gemini API가 활성화되어 있는지 확인해주세요.\n"
-            error_msg += "3. 사용 가능한 모델 목록을 확인해주세요.\n\n"
+            error_msg += "1. **API 키 확인:** Google Cloud Console에서 API 키가 올바르게 생성되었는지 확인해주세요.\n"
+            error_msg += "2. **Gemini API 활성화:** Google Cloud Console에서 'Generative Language API'가 활성화되어 있는지 확인해주세요.\n"
+            error_msg += "3. **API 키 제한 설정:** API 키의 '애플리케이션 제한사항'에서 'Generative Language API'가 허용되어 있는지 확인해주세요.\n"
+            error_msg += "4. **프로젝트 확인:** 올바른 Google Cloud 프로젝트에서 API 키를 생성했는지 확인해주세요.\n"
+            error_msg += "5. **모델 목록 확인:** 페이지를 새로고침하여 사용 가능한 모델 목록을 다시 로드해보세요.\n\n"
+            error_msg += "💡 **팁:** 모든 모델에서 404 오류가 발생한다면 API 키 설정에 문제가 있을 가능성이 높습니다.\n\n"
         else:
             error_msg += f"**오류 상세:** {last_error}\n\n"
             if last_status_code:
