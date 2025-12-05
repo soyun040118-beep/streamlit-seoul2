@@ -339,12 +339,23 @@ with st.container(border=True):
                         st.success(f"**올바른 예시:** {question_data['정답']}")
                         st.error(f"**틀린 예시:** {question_data['오답들'][0] if question_data['오답들'] else ''}")
                 
-                # 다음 문제로 넘어가기 버튼
-                if st.button("➡️ 다음 문제 풀기", key=f"next_question_{question_id}"):
-                    st.session_state[f"is_submitted_{question_id}"] = False
-                    st.session_state[f"submitted_answer_{question_id}"] = None
-                    generate_question(st.session_state.retry_mode)
-                    st.rerun()
+                # 자동으로 다음 문제로 넘어가기 (3초 후)
+                auto_next_key = f"auto_next_question_{question_id}"
+                timer_key = f"auto_next_timer_{question_id}"
+                if st.session_state.get(auto_next_key, False):
+                    elapsed = time.time() - st.session_state.get(timer_key, time.time())
+                    remaining = max(0, 3 - int(elapsed))
+                    if remaining > 0:
+                        st.info(f"⏱️ {remaining}초 후 자동으로 다음 문제로 넘어갑니다...")
+                        time.sleep(0.5)  # 짧은 대기 후 다시 체크
+                        st.rerun()
+                    else:
+                        # 시간이 지나면 다음 문제로 이동
+                        st.session_state[f"is_submitted_{question_id}"] = False
+                        st.session_state[f"submitted_answer_{question_id}"] = None
+                        st.session_state[auto_next_key] = False
+                        generate_question(st.session_state.retry_mode)
+                        st.rerun()
 
 # --- 6. 오답 유형 분석 및 추천 ---
 if st.session_state.quiz_history:
