@@ -116,7 +116,7 @@ with st.sidebar:
         st.warning("API 키가 필요해요! 🔑")
 
 st.title("👨‍🏫 알쏭달쏭 문법 교실 🤖")
-st.write("초등학생들이 자주 헷갈리는 문법들을 모았어요. 규칙을 익히고 퀴즈를 풀며 문법 실력을 키워봐요!")
+st.write("평소에 친구들과 대화할 때 알쏭달쏭한 문법이 있지는 않았나요? 규칙을 익히고 퀴즈를 풀며 문법 실력을 키워봐요!")
 
 # 세션 상태(session_state)에 데이터가 없으면 초기화
 if 'grammar_df' not in st.session_state:
@@ -261,9 +261,13 @@ with st.container(border=True):
             elif st.session_state.answer_feedback == "incorrect":
                 question_data = st.session_state.current_question
                 st.error(f"아쉬워요, 정답은 **'{question_data['정답']}'** 입니다.")
-                with st.expander("🔍 왜 틀렸을까요? (규칙 확인)"):
-                    st.write(f"**오류 유형:** {question_data['오류 유형']}")
-                    st.write(f"**규칙:** {question_data['규칙 설명']}")
+                with st.expander("🔍 왜 틀렸을까요? (규칙 확인)", expanded=True):
+                    st.markdown(f"##### 💡 **{question_data['오류 유형']}** 규칙")
+                    with st.container(border=True):
+                        st.info(f"**규칙:** {question_data['규칙 설명']}")
+                        # 예시 문장 추가
+                        st.success(f"**올바른 예시:** {question_data['정답']}")
+                        st.error(f"**틀린 예시:** {question_data['오답들'][0] if question_data['오답들'] else ''}")
 
 # --- 6. 오답 유형 분석 및 추천 ---
 if st.session_state.quiz_history:
@@ -288,8 +292,10 @@ if st.session_state.quiz_history:
 
                 # 해당 규칙 정보 가져오기
                 rule_info = st.session_state.grammar_df[st.session_state.grammar_df['오류 유형'] == most_common_error].iloc[0]
-                st.info(f"**규칙:** {rule_info['규칙 설명']}")
-                st.write(f"**예시:** '{rule_info['예시 (틀린 문장)']}' ➡️ '{rule_info['예시 (맞는 문장)']}'")
+                with st.container(border=True):
+                    st.info(f"**규칙:** {rule_info['규칙 설명']}")
+                    st.success(f"**올바른 예시:** {rule_info['예시 (맞는 문장)']}")
+                    st.error(f"**틀린 예시:** {rule_info['예시 (틀린 문장)']}")
             else:
                 st.write("아직 기록된 오답이 없습니다.")
 
@@ -331,8 +337,10 @@ with st.form("levelup_quiz_form", clear_on_submit=False):
         # 규칙 설명 Expander
         with st.expander("🤔 관련 규칙 보기"):
             rule_info = st.session_state.grammar_df.loc[st.session_state.grammar_df['오류 유형'] == q['오류 유형']].iloc[0]
-            st.write(f"**규칙:** {rule_info['규칙 설명']}")
-            st.write(f"**예시:** '{rule_info['예시 (틀린 문장)']}' ➡️ '{rule_info['예시 (맞는 문장)']}'")
+            with st.container(border=True):
+                st.info(f"**규칙:** {rule_info['규칙 설명']}")
+                st.success(f"**올바른 예시:** {rule_info['예시 (맞는 문장)']}")
+                st.error(f"**틀린 예시:** {rule_info['예시 (틀린 문장)']}")
 
         # 선택지 생성 및 섞기
         options = q['오답들'] + [q['정답']]
