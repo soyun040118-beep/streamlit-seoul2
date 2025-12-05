@@ -295,11 +295,10 @@ with st.container(border=True):
                         st.session_state.answer_feedback_question_id = question_id
                         if st.session_state.retry_mode:
                             st.session_state.incorrect_questions[st.session_state.current_retry_index] = None
-                        # 정답일 때 풍선 표시 후 빠르게 다음 문제로 이동 (2초 후)
+                        # 정답일 때 풍선 표시 후 빠르게 다음 문제로 이동 (1.5초 후)
                         st.session_state[f"auto_next_question_{question_id}"] = True
                         st.session_state[f"auto_next_timer_{question_id}"] = time.time()
-                        st.session_state[f"auto_next_delay_{question_id}"] = 2.0  # 2초 딜레이 (풍선을 보여주기 위해)
-                        # 폼 제출 후 자동 rerun이 되므로 여기서는 rerun하지 않음
+                        st.session_state[f"auto_next_delay_{question_id}"] = 1.5  # 1.5초 딜레이 (풍선을 보여주기 위해)
                     else:
                         st.session_state.answer_feedback = "incorrect"
                         st.session_state.answer_feedback_question_id = question_id
@@ -321,17 +320,23 @@ with st.container(border=True):
                         st.session_state[f"auto_next_timer_{question_id}"] = time.time()
 
         # 정답 제출 후 피드백 표시 (같은 문제에 대해서만)
-        if is_submitted and st.session_state.get('answer_feedback_question_id') == question_id:
-            if st.session_state.answer_feedback == "correct":
+        feedback_question_id = st.session_state.get('answer_feedback_question_id', None)
+        if is_submitted and feedback_question_id == question_id:
+            if st.session_state.get('answer_feedback') == "correct":
                 st.success("🎉 정답입니다!")
                 st.balloons()
-                # 정답일 때 빠르게 다음 문제로 넘어가기 (2초 후)
+                # 정답일 때 빠르게 다음 문제로 넘어가기
                 auto_next_key = f"auto_next_question_{question_id}"
                 timer_key = f"auto_next_timer_{question_id}"
                 delay_key = f"auto_next_delay_{question_id}"
+                
+                # 타이머가 설정되어 있으면 체크
                 if st.session_state.get(auto_next_key, False):
-                    elapsed = time.time() - st.session_state.get(timer_key, time.time())
-                    delay = st.session_state.get(delay_key, 2.0)
+                    current_time = time.time()
+                    start_time = st.session_state.get(timer_key, current_time)
+                    elapsed = current_time - start_time
+                    delay = st.session_state.get(delay_key, 1.5)
+                    
                     if elapsed >= delay:
                         # 시간이 지나면 다음 문제로 이동
                         st.session_state[f"is_submitted_{question_id}"] = False
@@ -341,12 +346,17 @@ with st.container(border=True):
                             del st.session_state[timer_key]
                         if delay_key in st.session_state:
                             del st.session_state[delay_key]
+                        # 피드백 상태 초기화
+                        if 'answer_feedback' in st.session_state:
+                            del st.session_state['answer_feedback']
+                        if 'answer_feedback_question_id' in st.session_state:
+                            del st.session_state['answer_feedback_question_id']
                         generate_question(st.session_state.retry_mode)
                         st.rerun()
                     else:
                         # 아직 시간이 안 지났으면 잠시 후 다시 렌더링
-                        remaining = max(0, delay - elapsed)
-                        if remaining > 0.1:  # 0.1초 이상 남았을 때만 표시
+                        remaining = delay - elapsed
+                        if remaining > 0.1:
                             st.info(f"⏱️ {int(remaining) + 1}초 후 자동으로 다음 문제로 넘어갑니다...")
                         # 자동으로 다시 렌더링하여 타이머 업데이트
                         st.rerun()
