@@ -295,11 +295,9 @@ with st.container(border=True):
                         st.session_state.answer_feedback_question_id = question_id
                         if st.session_state.retry_mode:
                             st.session_state.incorrect_questions[st.session_state.current_retry_index] = None
-                        # 정답일 때 다음 문제로 자동 이동
-                        st.session_state[f"is_submitted_{question_id}"] = False
-                        st.session_state[f"submitted_answer_{question_id}"] = None
-                        generate_question(st.session_state.retry_mode)
-                        st.rerun()
+                        # 정답일 때 풍선 표시 및 다음 문제로 자동 이동 (3초 후)
+                        st.session_state[f"auto_next_question_{question_id}"] = True
+                        st.session_state[f"auto_next_timer_{question_id}"] = time.time()
                     else:
                         st.session_state.answer_feedback = "incorrect"
                         st.session_state.answer_feedback_question_id = question_id
@@ -319,14 +317,31 @@ with st.container(border=True):
                         # 오답일 때도 자동으로 다음 문제로 이동 (3초 후)
                         st.session_state[f"auto_next_question_{question_id}"] = True
                         st.session_state[f"auto_next_timer_{question_id}"] = time.time()
-                        # 첫 번째 렌더링에서는 피드백만 보여주고, 3초 후 자동으로 넘어감
 
         # 정답 제출 후 피드백 표시 (같은 문제에 대해서만)
         if is_submitted and st.session_state.get('answer_feedback_question_id') == question_id:
             if st.session_state.answer_feedback == "correct":
                 st.success("🎉 정답입니다!")
                 st.balloons()
-                st.info("잠시 후 다음 문제로 넘어갑니다...")
+                # 자동으로 다음 문제로 넘어가기 (3초 후)
+                auto_next_key = f"auto_next_question_{question_id}"
+                timer_key = f"auto_next_timer_{question_id}"
+                if st.session_state.get(auto_next_key, False):
+                    elapsed = time.time() - st.session_state.get(timer_key, time.time())
+                    remaining = max(0, 3 - int(elapsed))
+                    if remaining > 0:
+                        st.info(f"⏱️ {remaining}초 후 자동으로 다음 문제로 넘어갑니다...")
+                        # 자동으로 다시 렌더링하여 카운트다운 업데이트
+                        st.rerun()
+                    else:
+                        # 시간이 지나면 다음 문제로 이동
+                        st.session_state[f"is_submitted_{question_id}"] = False
+                        st.session_state[f"submitted_answer_{question_id}"] = None
+                        st.session_state[auto_next_key] = False
+                        if timer_key in st.session_state:
+                            del st.session_state[timer_key]
+                        generate_question(st.session_state.retry_mode)
+                        st.rerun()
             elif st.session_state.answer_feedback == "incorrect":
                 st.error(f"❌ 아쉬워요, 정답은 **'{question_data['정답']}'** 입니다.")
                 if submitted_answer:
@@ -349,7 +364,6 @@ with st.container(border=True):
                     if remaining > 0:
                         st.info(f"⏱️ {remaining}초 후 자동으로 다음 문제로 넘어갑니다...")
                         # 자동으로 다시 렌더링하여 카운트다운 업데이트
-                        time.sleep(1)
                         st.rerun()
                     else:
                         # 시간이 지나면 다음 문제로 이동
