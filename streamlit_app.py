@@ -18,7 +18,7 @@ def get_grammar_data():
             "'데'는 직접 경험한 사실을, '대'는 다른 사람에게 들은 내용을 전달할 때 사용해요.",
             '받침이 있으면 **\'이에요\'**, 받침이 없으면 **\'예요\'**를 써요. 하지만 **\'아니다\'**는 무조건 **\'아니에요\'**가 맞아요! (줄여서 \'아녜요\'도 O) 그 이유가 궁금한 학생은 선생님과 함께 탐구해볼까요?',
             "'어떻게'는 '어떠하게'의 준말로 방법을 물을 때 쓰고, '어떡해'는 '어떻게 해'의 준말로 걱정되는 상황에서 사용해요.",
-            "'되어'의 준말이 '돼'예요. '되어'를 넣어 말이 되면 '돼'를 쓸 수 있어요.",
+            "'되어'의 준말이 '돼'예요. '되어'를 넣어 말이 되면 '돼'를 쓸 수 있어요. **사용법:** '되' 또는 '돼' 앞에 '하' 또는 '해'를 넣어보세요. '돼'는 '해'로 바꾸었을 때 말이 되면 '돼'를 씁니다. (예: '안 돼' → '안 해' ✓) '되'는 '하'로 바꾸었을 때 말이 되면 '되'를 씁니다. (예: '그날이 되었을 때' → '그날이 하였을 때' ✓)",
             "'아니'의 준말이 '안'이에요. '아니하다'의 준말은 '않다'고요."
         ],
         '예시 (틀린 문장)': [
@@ -515,10 +515,10 @@ with st.container(border=True):
                         st.session_state.answer_feedback_question_id = question_id
                         if st.session_state.retry_mode:
                             st.session_state.incorrect_questions[st.session_state.current_retry_index] = None
-                        # 정답일 때 풍선 표시 후 빠르게 다음 문제로 이동 (2초 후)
+                        # 정답일 때 풍선 표시 후 빠르게 다음 문제로 이동 (1초 후)
                         st.session_state[f"auto_next_question_{question_id}"] = True
                         st.session_state[f"auto_next_timer_{question_id}"] = time.time()
-                        st.session_state[f"auto_next_delay_{question_id}"] = 2.0  # 2초 딜레이 (풍선을 보여주기 위해)
+                        st.session_state[f"auto_next_delay_{question_id}"] = 1.0  # 1초 딜레이
                         # 폼 안에서 즉시 정답 피드백 표시
                         st.success("🎉 정답입니다!")
                     else:
@@ -568,7 +568,7 @@ with st.container(border=True):
                     current_time = time.time()
                     start_time = st.session_state.get(timer_key, current_time)
                     elapsed = current_time - start_time
-                    delay = st.session_state.get(delay_key, 2.0)
+                    delay = st.session_state.get(delay_key, 1.0)
                     
                     if elapsed >= delay:
                         # 시간이 지나면 다음 문제로 이동
@@ -588,9 +588,7 @@ with st.container(border=True):
                         st.rerun()
                     else:
                         # 아직 시간이 안 지났으면 잠시 후 다시 렌더링
-                        remaining = delay - elapsed
-                        if remaining > 0.1:
-                            st.info(f"⏱️ {int(remaining) + 1}초 후 자동으로 다음 문제로 넘어갑니다...")
+                        # 1초 딜레이이므로 카운트다운 메시지는 표시하지 않음
                         # 자동으로 다시 렌더링하여 타이머 업데이트
                         st.rerun()
             elif feedback_type == "incorrect":
@@ -1006,8 +1004,16 @@ else:
                         "\n4. **되/돼 규칙:**\n"
                         "- '되어'의 준말이 '돼'예요.\n"
                         "- '되어'를 넣어 말이 되면 '돼'를 쓸 수 있어요.\n"
-                        "- 예: '그러면 안 돼' (안 되어), '이제 가도 되나요?' (가도 되나요?)\n"
+                        "- **사용법:** '되' 또는 '돼' 앞에 '하' 또는 '해'를 넣어보세요.\n"
+                        "- '돼': '해'로 바꾸었을 때 말이 되면 '돼'를 씁니다.\n"
+                        "  예: '쓰레기를 이곳에 버리면 안 돼' → '쓰레기를 이곳에 버리면 안 해' (자연스러움) ✓\n"
+                        "- '되': '하'로 바꾸었을 때 말이 되면 '되'를 씁니다.\n"
+                        "  예: '그날이 되었을 때' → '그날이 하였을 때' (자연스러움) ✓\n"
                         "- '되'는 동사로 쓰일 때 사용해요: '의사가 되고 싶어요'\n"
+                        "- **중요:** '안되'는 문법적으로 완전히 틀린 표현이에요. 절대 사용하면 안 됩니다.\n"
+                        "  올바른 표현: '안 돼' 또는 '안돼' (띄어쓰기 여부는 맥락에 따라 다름)\n"
+                        "  틀린 표현: '안되' (이것은 절대 사용하면 안 되는 틀린 표현입니다)\n"
+                        "  예: '안돼, 걷지 마세요' ✓ / '안되, 걷지 마세요' ✗ (완전히 틀림)\n"
                         "\n5. **안/않 규칙:**\n"
                         "- '아니'의 준말이 '안'이에요.\n"
                         "- '아니하다'의 준말은 '않다'예요.\n"
