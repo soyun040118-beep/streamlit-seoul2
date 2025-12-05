@@ -295,9 +295,10 @@ with st.container(border=True):
                         st.session_state.answer_feedback_question_id = question_id
                         if st.session_state.retry_mode:
                             st.session_state.incorrect_questions[st.session_state.current_retry_index] = None
-                        # 정답일 때 풍선 표시 및 다음 문제로 자동 이동 (3초 후)
+                        # 정답일 때 풍선 표시 후 빠르게 다음 문제로 이동 (1초 후)
                         st.session_state[f"auto_next_question_{question_id}"] = True
                         st.session_state[f"auto_next_timer_{question_id}"] = time.time()
+                        st.session_state[f"auto_next_delay_{question_id}"] = 1.0  # 1초 딜레이
                     else:
                         st.session_state.answer_feedback = "incorrect"
                         st.session_state.answer_feedback_question_id = question_id
@@ -323,15 +324,16 @@ with st.container(border=True):
             if st.session_state.answer_feedback == "correct":
                 st.success("🎉 정답입니다!")
                 st.balloons()
-                # 자동으로 다음 문제로 넘어가기 (3초 후)
+                # 정답일 때 빠르게 다음 문제로 넘어가기 (1초 후)
                 auto_next_key = f"auto_next_question_{question_id}"
                 timer_key = f"auto_next_timer_{question_id}"
+                delay_key = f"auto_next_delay_{question_id}"
                 if st.session_state.get(auto_next_key, False):
                     elapsed = time.time() - st.session_state.get(timer_key, time.time())
-                    remaining = max(0, 3 - int(elapsed))
+                    delay = st.session_state.get(delay_key, 1.0)
+                    remaining = max(0, delay - elapsed)
                     if remaining > 0:
-                        st.info(f"⏱️ {remaining}초 후 자동으로 다음 문제로 넘어갑니다...")
-                        # 자동으로 다시 렌더링하여 카운트다운 업데이트
+                        # 자동으로 다시 렌더링하여 다음 문제로 이동
                         st.rerun()
                     else:
                         # 시간이 지나면 다음 문제로 이동
@@ -340,6 +342,8 @@ with st.container(border=True):
                         st.session_state[auto_next_key] = False
                         if timer_key in st.session_state:
                             del st.session_state[timer_key]
+                        if delay_key in st.session_state:
+                            del st.session_state[delay_key]
                         generate_question(st.session_state.retry_mode)
                         st.rerun()
             elif st.session_state.answer_feedback == "incorrect":
