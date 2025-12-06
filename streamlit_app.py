@@ -602,16 +602,7 @@ with st.container(border=True):
                             del st.session_state['answer_feedback_question_id']
                         generate_question(st.session_state.retry_mode)
                         st.rerun()
-                    else:
-                        # 아직 시간이 안 지났으면 자동으로 다시 렌더링하여 타이머 업데이트
-                        # 무한 루프 방지를 위해 최소 간격 체크
-                        last_rerun_key = f"last_rerun_{question_id}"
-                        last_rerun_time = st.session_state.get(last_rerun_key, 0)
-                        current_time_for_rerun = time.time()
-                        # 0.1초 이상 지났을 때만 rerun (무한 루프 방지)
-                        if current_time_for_rerun - last_rerun_time >= 0.1:
-                            st.session_state[last_rerun_key] = current_time_for_rerun
-                            st.rerun()
+                    # else 블록 제거: Streamlit이 자동으로 새로고침하지 않으므로 수동 rerun 제거
             elif feedback_type == "incorrect":
                 st.error(f"❌ 아쉬워요, 정답은 **'{question_data['정답']}'** 입니다.")
                 if submitted_answer:
