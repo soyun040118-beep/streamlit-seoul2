@@ -984,40 +984,35 @@ else:
             current_question_data = msg["question_data"]
             break
     
-    # 문제가 있고 아직 답변이 없거나 "다시 시도해보세요" 피드백이면 선택지 버튼 표시
+    # 문제가 있고 아직 답변이 없거나 "다시 시도해보세요" 또는 "모르겠어요" 관련 메시지면 선택지 버튼 표시
     if current_question_data and st.session_state.chat_messages:
         last_message = st.session_state.chat_messages[-1]
-        # 마지막 메시지가 챗봇의 문제 제시이거나 "다시 시도해보세요" 피드백이면 버튼 표시
-        if (last_message["role"] == "assistant" and "문제:" in last_message["content"]) or \
-           (last_message["role"] == "assistant" and "다시 시도해보세요" in last_message["content"]):
-            # 선택지 생성 (정답 1개 + 오답 2개)
+        # 마지막 메시지가 챗봇의 문제 제시이거나 "다시 시도해보세요" 또는 규칙 설명 후 재시도 메시지면 버튼 표시
+        show_buttons = (last_message["role"] == "assistant" and "문제:" in last_message["content"]) or \
+                       (last_message["role"] == "assistant" and "다시 시도해보세요" in last_message["content"]) or \
+                       (last_message["role"] == "assistant" and "다시 선택해주세요" in last_message["content"])
+        
+        if show_buttons:
+            # 선택지 생성 (정답 1개 + 오답 1개 + '모르겠어요')
             import random
             correct_answer = current_question_data['정답']
             wrong_answers = current_question_data.get('오답들', [])
             
-            # 오답이 부족하면 다른 문제의 오답을 가져오거나 정답을 변형
-            while len(wrong_answers) < 2:
-                # 다른 문제에서 오답 가져오기
-                other_questions = [q for q in st.session_state.quiz_questions_data 
-                                 if q['문제'] != current_question_data['문제']]
-                if other_questions:
-                    other_q = random.choice(other_questions)
-                    other_wrong = other_q.get('오답들', [])
-                    if other_wrong:
-                        wrong_answers.append(random.choice(other_wrong))
-                    else:
-                        # 정답을 약간 변형해서 오답 만들기
-                        wrong_answers.append(correct_answer.replace('예요', '에요').replace('에요', '예요').replace('되', '돼').replace('돼', '되'))
-                else:
-                    # 정답을 약간 변형해서 오답 만들기
-                    wrong_answers.append(correct_answer.replace('예요', '에요').replace('에요', '예요').replace('되', '돼').replace('돼', '되'))
+            # 오답이 없으면 정답을 변형해서 오답 만들기
+            if len(wrong_answers) == 0:
+                # 정답을 약간 변형해서 오답 만들기
+                wrong_answer = correct_answer.replace('예요', '에요').replace('에요', '예요').replace('되', '돼').replace('돼', '되')
+                if wrong_answer == correct_answer:  # 변형이 안 되면 다른 방법 시도
+                    wrong_answer = correct_answer.replace('이에요', '예요').replace('예요', '이에요')
+                wrong_answers = [wrong_answer]
             
-            # 정답 1개 + 오답 2개로 구성
-            options = [correct_answer] + wrong_answers[:2]
+            # 정답 1개 + 오답 1개 + '모르겠어요'로 구성
+            options = [correct_answer, wrong_answers[0], "모르겠어요"]
             random.shuffle(options)
             
-            # 정답 인덱스 저장
+            # 정답 인덱스와 모르겠어요 인덱스 저장
             correct_index = options.index(correct_answer)
+            dont_know_index = options.index("모르겠어요")
             
             # 버튼으로 선택지 표시
             st.markdown("**답을 선택해주세요:**")
@@ -1030,104 +1025,71 @@ else:
                 f"answer_btn_2_{hash(current_question_data['문제'])}"
             ]
             
+            def handle_button_click(button_index, selected_option):
+                """버튼 클릭 처리 함수"""
+                current_time = datetime.now().strftime("%H:%M")
+                
+                # 사용자 메시지로 대화창에 표시
+                user_message = {"role": "user", "content": selected_option, "timestamp": current_time}
+                st.session_state.chat_messages.append(user_message)
+                
+                if button_index == dont_know_index:
+                    # 모르겠어요 버튼 처리
+                    # 관련 규칙 가져오기
+                    rule_info_series = st.session_state.grammar_df[
+                        st.session_state.grammar_df['오류 유형'] == current_question_data['오류 유형']
+                    ].iloc[0]
+                    
+                    rule_message = f"💡 **{current_question_data['오류 유형']} 규칙**\n\n"
+                    rule_message += f"**규칙 설명:** {rule_info_series['규칙 설명']}\n\n"
+                    rule_message += f"**올바른 예시:** {rule_info_series['예시 (맞는 문장)']}\n\n"
+                    rule_message += f"**틀린 예시:** {rule_info_series['예시 (틀린 문장)']}\n\n"
+                    rule_message += "이제 다시 정답을 선택해볼까요? 😊"
+                    
+                    assistant_time = datetime.now().strftime("%H:%M")
+                    st.session_state.chat_messages.append({
+                        "role": "assistant",
+                        "content": rule_message,
+                        "timestamp": assistant_time
+                    })
+                    st.rerun()
+                elif button_index == correct_index:
+                    # 정답 처리
+                    feedback_message = {"role": "assistant", "content": "정답입니다! 🎉", "timestamp": current_time}
+                    st.session_state.chat_messages.append(feedback_message)
+                    
+                    # 다음 문제 제시
+                    available_questions = [q for q in st.session_state.quiz_questions_data 
+                                         if q['문제'] != current_question_data['문제']]
+                    if available_questions:
+                        next_question = random.choice(available_questions)
+                        st.session_state.current_quiz_question = next_question
+                        next_question_text = f"다음 문제예요! 😊\n\n**문제:** {next_question['문제']}\n\n아래 버튼 중에서 올바른 표현을 선택해주세요!"
+                        next_time = datetime.now().strftime("%H:%M")
+                        st.session_state.chat_messages.append({
+                            "role": "assistant",
+                            "content": next_question_text,
+                            "timestamp": next_time,
+                            "question_data": next_question
+                        })
+                    st.rerun()
+                else:
+                    # 오답 처리
+                    feedback_message = {"role": "assistant", "content": "다시 시도해보세요 😊", "timestamp": current_time}
+                    st.session_state.chat_messages.append(feedback_message)
+                    st.rerun()
+            
             with col1:
                 if st.button(options[0], key=button_keys[0], use_container_width=True):
-                    selected_answer = options[0]
-                    is_correct = (0 == correct_index)
-                    
-                    if is_correct:
-                        # 정답 처리
-                        current_time = datetime.now().strftime("%H:%M")
-                        feedback_message = {"role": "assistant", "content": "정답입니다! 🎉", "timestamp": current_time}
-                        st.session_state.chat_messages.append(feedback_message)
-                        
-                        # 다음 문제 제시
-                        available_questions = [q for q in st.session_state.quiz_questions_data 
-                                             if q['문제'] != current_question_data['문제']]
-                        if available_questions:
-                            next_question = random.choice(available_questions)
-                            st.session_state.current_quiz_question = next_question
-                            next_question_text = f"다음 문제예요! 😊\n\n**문제:** {next_question['문제']}\n\n아래 버튼 중에서 올바른 표현을 선택해주세요!"
-                            next_time = datetime.now().strftime("%H:%M")
-                            st.session_state.chat_messages.append({
-                                "role": "assistant",
-                                "content": next_question_text,
-                                "timestamp": next_time,
-                                "question_data": next_question
-                            })
-                        st.rerun()
-                    else:
-                        # 오답 처리
-                        current_time = datetime.now().strftime("%H:%M")
-                        feedback_message = {"role": "assistant", "content": "다시 시도해보세요 😊", "timestamp": current_time}
-                        st.session_state.chat_messages.append(feedback_message)
-                        st.rerun()
+                    handle_button_click(0, options[0])
             
             with col2:
                 if st.button(options[1], key=button_keys[1], use_container_width=True):
-                    selected_answer = options[1]
-                    is_correct = (1 == correct_index)
-                    
-                    if is_correct:
-                        # 정답 처리
-                        current_time = datetime.now().strftime("%H:%M")
-                        feedback_message = {"role": "assistant", "content": "정답입니다! 🎉", "timestamp": current_time}
-                        st.session_state.chat_messages.append(feedback_message)
-                        
-                        # 다음 문제 제시
-                        available_questions = [q for q in st.session_state.quiz_questions_data 
-                                             if q['문제'] != current_question_data['문제']]
-                        if available_questions:
-                            next_question = random.choice(available_questions)
-                            st.session_state.current_quiz_question = next_question
-                            next_question_text = f"다음 문제예요! 😊\n\n**문제:** {next_question['문제']}\n\n아래 버튼 중에서 올바른 표현을 선택해주세요!"
-                            next_time = datetime.now().strftime("%H:%M")
-                            st.session_state.chat_messages.append({
-                                "role": "assistant",
-                                "content": next_question_text,
-                                "timestamp": next_time,
-                                "question_data": next_question
-                            })
-                        st.rerun()
-                    else:
-                        # 오답 처리
-                        current_time = datetime.now().strftime("%H:%M")
-                        feedback_message = {"role": "assistant", "content": "다시 시도해보세요 😊", "timestamp": current_time}
-                        st.session_state.chat_messages.append(feedback_message)
-                        st.rerun()
+                    handle_button_click(1, options[1])
             
             with col3:
                 if st.button(options[2], key=button_keys[2], use_container_width=True):
-                    selected_answer = options[2]
-                    is_correct = (2 == correct_index)
-                    
-                    if is_correct:
-                        # 정답 처리
-                        current_time = datetime.now().strftime("%H:%M")
-                        feedback_message = {"role": "assistant", "content": "정답입니다! 🎉", "timestamp": current_time}
-                        st.session_state.chat_messages.append(feedback_message)
-                        
-                        # 다음 문제 제시
-                        available_questions = [q for q in st.session_state.quiz_questions_data 
-                                             if q['문제'] != current_question_data['문제']]
-                        if available_questions:
-                            next_question = random.choice(available_questions)
-                            st.session_state.current_quiz_question = next_question
-                            next_question_text = f"다음 문제예요! 😊\n\n**문제:** {next_question['문제']}\n\n아래 버튼 중에서 올바른 표현을 선택해주세요!"
-                            next_time = datetime.now().strftime("%H:%M")
-                            st.session_state.chat_messages.append({
-                                "role": "assistant",
-                                "content": next_question_text,
-                                "timestamp": next_time,
-                                "question_data": next_question
-                            })
-                        st.rerun()
-                    else:
-                        # 오답 처리
-                        current_time = datetime.now().strftime("%H:%M")
-                        feedback_message = {"role": "assistant", "content": "다시 시도해보세요 😊", "timestamp": current_time}
-                        st.session_state.chat_messages.append(feedback_message)
-                        st.rerun()
+                    handle_button_click(2, options[2])
     
     # 버튼 클릭으로 답변이 처리되므로 Gemini 응답 생성은 제거
     # (버튼 클릭 시 즉시 피드백 제공)
