@@ -900,7 +900,7 @@ with st.container(border=True):
         <h3 style="color: white; margin: 0;">🤖 문법 마스터 챗봇</h3>
         <p style="color: white; font-size: 1.1em; margin: 10px 0 0 0;">
             안녕하세요! 저는 문법을 마스터한 초등학생이에요.<br>
-            맞춤법과 문법에 대해 친절하고 정확하게 설명해드릴게요! 💬
+            저와 함께 맞춤법을 얼마나 이해했는지 확인해보아요!
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -1039,7 +1039,8 @@ else:
                         "1. 학생이 답변을 입력하면, 현재 제시한 문제의 정답과 비교해서 정답 여부를 확인해야 해.\n"
                         "2. 정답인 경우: '정답입니다! 🎉' 또는 '정답입니다!'라고 밝고 명확하게 먼저 말하고, 왜 정답인지 간단히 설명해줘.\n"
                         "3. 오답인 경우: '아쉽지만 틀렸어요. 😊' 또는 '틀렸어요. 다시 생각해볼까요?'라고 먼저 말하고, 왜 틀렸는지 설명하고 올바른 정답을 제시해줘.\n"
-                        "4. 설명 후에는 다음 문제를 제시하지 말아야 해. 학생이 다시 질문하거나 문제를 요청할 때까지 기다려야 해.\n"
+                        "4. 설명 후에는 반드시 다음 문제를 제시해야 해. 랜덤으로 다른 문제를 선택해서 제시해줘.\n"
+                        "5. 문제를 제시할 때는 '다음 문제예요! 😊' 또는 '다음 문제를 풀어볼까요?'라고 말하고 문제를 제시해줘.\n"
                         f"{questions_text}"
                         f"{current_question_info}"
                         "\n**매우 중요 - 학생 답변 확인 절차:**\n"
@@ -1052,7 +1053,7 @@ else:
                         "     → 학생의 답변에 '받침' 키워드가 포함되어 있으면 정답으로 처리해야 해.\n"
                         "     → 예: '받침이 있으면', '받침이 없으면', '받침 여부' 등이 포함되면 정답\n"
                         "3. 일반 문제의 경우: 학생의 답변이 정답과 일치하면 정답으로 판단하고, 일치하지 않으면 오답으로 판단해야 해.\n"
-                        "4. 정답 여부를 확인한 후, 친절하게 피드백을 제공하되 다음 문제는 자동으로 제시하지 말아야 해.\n"
+                        "4. 정답 여부를 확인한 후, 친절하게 피드백을 제공하고 반드시 다음 문제를 제시해야 해.\n"
                         "\n**매우 중요 - 답변 완성도:**\n"
                         "- 반드시 문장을 끝까지 완성해서 답변해야 해. 절대로 말을 중간에 끊으면 안 돼.\n"
                         "- 설명이 길어지더라도 반드시 완전한 문장으로 끝내야 해.\n"
@@ -1069,12 +1070,16 @@ else:
                         "3. 정답인 경우:\n"
                         "   - '정답입니다! 🎉' 또는 '정답입니다!'라고 밝고 명확하게 먼저 말하기\n"
                         "   - 왜 정답인지 간단히 설명 (해당 문법 규칙 언급)\n"
-                        "   - 다음 문제는 제시하지 말기\n"
+                        "   - 다음 문제 제시\n"
                         "4. 오답인 경우:\n"
                         "   - '아쉽지만 틀렸어요. 😊' 또는 '틀렸어요. 다시 생각해볼까요?'라고 먼저 말하기\n"
                         "   - 왜 틀렸는지 설명 (어떤 문법 규칙이 적용되는지)\n"
                         "   - 올바른 정답 제시\n"
-                        "   - 다음 문제는 제시하지 말기\n"
+                        "   - 다음 문제 제시\n"
+                        "5. 다음 문제 제시:\n"
+                        "   - '다음 문제예요! 😊' 또는 '다음 문제를 풀어볼까요?'라고 말하기\n"
+                        "   - 문제 목록에서 랜덤으로 다른 문제 선택해서 제시\n"
+                        "   - 형식: '**문제:** [문제 내용]'\n"
                         "\n\n**중요한 문법 규칙 (반드시 정확하게 지켜야 함):**\n"
                         "\n1. **에요/예요 규칙 (매우 중요):**\n"
                         "- **받침이 있는 명사:** '이에요'를 사용합니다.\n"
@@ -1245,6 +1250,27 @@ else:
                             </div>
                             """, unsafe_allow_html=True)
                             
+                            # 챗봇 응답에 다음 문제가 포함되어 있지 않으면 자동으로 다음 문제 제시
+                            if "다음 문제" not in full_response and "**문제:**" not in full_response:
+                                # 랜덤으로 다음 문제 선택 (이전 문제와 다른 문제)
+                                import random
+                                available_questions = [q for q in st.session_state.quiz_questions_data 
+                                                      if not st.session_state.current_quiz_question or 
+                                                      q['문제'] != st.session_state.current_quiz_question.get('문제')]
+                                if available_questions:
+                                    next_question = random.choice(available_questions)
+                                    st.session_state.current_quiz_question = next_question
+                                    
+                                    # 다음 문제 제시 메시지 추가
+                                    next_question_text = f"\n\n다음 문제예요! 😊\n\n**문제:** {next_question['문제']}\n\n이 문장에서 올바른 표현을 선택해주세요!"
+                                    next_time = datetime.now().strftime("%H:%M")
+                                    st.session_state.chat_messages.append({
+                                        "role": "assistant",
+                                        "content": next_question_text,
+                                        "timestamp": next_time,
+                                        "question_data": next_question
+                                    })
+                                    st.rerun()
                         else:
                             # 스트림에서 아무것도 반환되지 않은 경우
                             st.error("앗, 응답을 생성하지 못했어. 다시 시도해줄래?")
