@@ -563,7 +563,6 @@ with st.container(border=True):
             
             if feedback_type == "correct":
                 st.success("🎉 정답입니다!")
-                st.balloons()
                 # 정답일 때 빠르게 다음 문제로 넘어가기
                 auto_next_key = f"auto_next_question_{question_id}"
                 timer_key = f"auto_next_timer_{question_id}"
