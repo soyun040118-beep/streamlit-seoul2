@@ -337,6 +337,15 @@ with st.sidebar:
         
         💡 **팁:** 질문을 구체적으로 하면 더 정확한 답변을 받을 수 있어요!
         """)
+    
+    # 챗봇 대화 초기화 버튼
+    st.markdown("---")
+    if st.button("🔄 챗봇 대화 초기화", use_container_width=True, type="secondary"):
+        if 'chat_messages' in st.session_state:
+            st.session_state.chat_messages = []
+        if 'current_quiz_question' in st.session_state:
+            st.session_state.current_quiz_question = None
+        st.rerun()
 
 st.title("👨‍🏫 알쏭달쏭 문법 교실 🤖")
 st.write("평소에 친구들과 대화할 때 알쏭달쏭한 문법이 있지는 않았나요? 규칙을 익히고 퀴즈를 풀며 문법 실력을 키워봐요!")
@@ -990,7 +999,8 @@ else:
         # 마지막 메시지가 챗봇의 문제 제시이거나 "다시 시도해보세요" 또는 규칙 설명 후 재시도 메시지면 버튼 표시
         show_buttons = (last_message["role"] == "assistant" and "문제:" in last_message["content"]) or \
                        (last_message["role"] == "assistant" and "다시 시도해보세요" in last_message["content"]) or \
-                       (last_message["role"] == "assistant" and "다시 선택해주세요" in last_message["content"])
+                       (last_message["role"] == "assistant" and "다시 선택해주세요" in last_message["content"]) or \
+                       (last_message["role"] == "assistant" and "이제 다시 정답을 선택해볼까요?" in last_message["content"])
         
         if show_buttons:
             # 선택지 생성 (정답 1개 + 오답 1개 + '모르겠어요')
@@ -1006,8 +1016,9 @@ else:
                     wrong_answer = correct_answer.replace('이에요', '예요').replace('예요', '이에요')
                 wrong_answers = [wrong_answer]
             
-            # 정답 1개 + 오답 1개 + '모르겠어요'로 구성
-            options = [correct_answer, wrong_answers[0], "모르겠어요"]
+            # 틀린 문장(오답) 1개 + 정답 1개 + '모르겠어요'로 구성
+            # 순서: 틀린 문장, 정답, 모르겠어요
+            options = [wrong_answers[0], correct_answer, "모르겠어요"]
             random.shuffle(options)
             
             # 정답 인덱스와 모르겠어요 인덱스 저장
