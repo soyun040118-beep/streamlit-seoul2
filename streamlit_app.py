@@ -582,7 +582,7 @@ with st.container(border=True):
                     delay = st.session_state.get(delay_key, 1.0)
                     
                     if elapsed >= delay:
-                        # 시간이 지나면 다음 문제로 이동
+                        # 시간이 지나면 다음 문제로 이동 (1초 후)
                         st.session_state[f"is_submitted_{question_id}"] = False
                         st.session_state[f"submitted_answer_{question_id}"] = None
                         st.session_state[auto_next_key] = False
@@ -599,7 +599,11 @@ with st.container(border=True):
                             del st.session_state['answer_feedback']
                         if 'answer_feedback_question_id' in st.session_state:
                             del st.session_state['answer_feedback_question_id']
-                        generate_question(st.session_state.retry_mode)
+                        # 다음 랜덤 문제 생성 (retry 모드가 아닐 때만)
+                        if not st.session_state.retry_mode:
+                            generate_question(retry=False)
+                        else:
+                            generate_question(retry=True)
                         st.rerun()
                     else:
                         # 아직 시간이 안 지났으면 자동으로 다시 렌더링하여 타이머 업데이트
