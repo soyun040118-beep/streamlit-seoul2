@@ -1162,6 +1162,80 @@ else:
             correct_index = options.index(correct_answer)
             dont_know_index = options.index("모르겠어요")
             
+            # 유형 선택 버튼 (답변 선택 영역 위에 표시)
+            st.markdown("---")
+            st.markdown("**📚 문법 유형 선택**")
+            
+            def change_grammar_type(new_type):
+                """문법 유형 변경 함수"""
+                st.session_state.selected_grammar_type = new_type
+                st.session_state.asked_questions = []  # 제시한 문제 목록 초기화
+                st.session_state.current_quiz_question = None
+                
+                # 새로운 유형의 첫 문제 제시
+                import random
+                if new_type == "랜덤":
+                    filtered_questions = st.session_state.quiz_questions_data
+                else:
+                    type_mapping = {
+                        "데/대": "데/대",
+                        "되/돼": "되/돼",
+                        "안/않": "안/않",
+                        "이에요/예요": "에요/예요",
+                        "어떡해/어떻게": "어떡해/어떻게"
+                    }
+                    target_type = type_mapping.get(new_type, new_type)
+                    filtered_questions = [q for q in st.session_state.quiz_questions_data 
+                                        if q['오류 유형'] == target_type]
+                
+                if filtered_questions:
+                    new_question = random.choice(filtered_questions)
+                    st.session_state.current_quiz_question = new_question
+                    st.session_state.asked_questions.append(new_question['문제'])
+                    
+                    type_display_name = {
+                        "데/대": "데/대",
+                        "되/돼": "되/돼",
+                        "안/않": "안/않",
+                        "이에요/예요": "이에요/예요",
+                        "어떡해/어떻게": "어떡해/어떻게",
+                        "랜덤": "랜덤 (유형 혼합)"
+                    }
+                    
+                    response_text = f"좋아요! {type_display_name.get(new_type, new_type)} 유형으로 바꿔드릴게요! 😊\n\n**문제:** {new_question['문제']}\n\n아래 버튼 중에서 올바른 표현을 선택해주세요!"
+                    response_time = datetime.now().strftime("%H:%M")
+                    st.session_state.chat_messages.append({
+                        "role": "assistant",
+                        "content": response_text,
+                        "timestamp": response_time,
+                        "question_data": new_question
+                    })
+                st.rerun()
+            
+            type_col1, type_col2, type_col3 = st.columns(3)
+            with type_col1:
+                if st.button("데/대", key="type_btn_데대", use_container_width=True, 
+                            type="primary" if st.session_state.selected_grammar_type == "데/대" else "secondary"):
+                    change_grammar_type("데/대")
+                if st.button("되/돼", key="type_btn_되돼", use_container_width=True,
+                            type="primary" if st.session_state.selected_grammar_type == "되/돼" else "secondary"):
+                    change_grammar_type("되/돼")
+            with type_col2:
+                if st.button("안/않", key="type_btn_안않", use_container_width=True,
+                            type="primary" if st.session_state.selected_grammar_type == "안/않" else "secondary"):
+                    change_grammar_type("안/않")
+                if st.button("이에요/예요", key="type_btn_이에요예요", use_container_width=True,
+                            type="primary" if st.session_state.selected_grammar_type == "이에요/예요" else "secondary"):
+                    change_grammar_type("이에요/예요")
+            with type_col3:
+                if st.button("어떡해/어떻게", key="type_btn_어떡해어떻게", use_container_width=True,
+                            type="primary" if st.session_state.selected_grammar_type == "어떡해/어떻게" else "secondary"):
+                    change_grammar_type("어떡해/어떻게")
+                if st.button("랜덤 (유형 혼합)", key="type_btn_랜덤", use_container_width=True,
+                            type="primary" if st.session_state.selected_grammar_type == "랜덤" else "secondary"):
+                    change_grammar_type("랜덤")
+            
+            st.markdown("---")
             # 버튼으로 선택지 표시
             st.markdown("**답을 선택해주세요:**")
             col1, col2, col3 = st.columns(3)
@@ -1259,88 +1333,6 @@ else:
                 if st.button(options[2], key=button_keys[2], use_container_width=True):
                     handle_button_click(2, options[2])
     
-    # 텍스트 입력으로 유형 변경 요청 처리
-    if st.session_state.selected_grammar_type is not None and st.session_state.chat_messages:
-        user_input = st.chat_input("메시지를 입력하세요...")
-        if user_input:
-            current_time = datetime.now().strftime("%H:%M")
-            user_message = {"role": "user", "content": user_input, "timestamp": current_time}
-            st.session_state.chat_messages.append(user_message)
-            
-            # 유형 변경 요청 감지
-            type_keywords = {
-                "데/대": ["데/대", "데대", "데 대"],
-                "되/돼": ["되/돼", "되돼", "되 돼"],
-                "안/않": ["안/않", "안않", "안 않"],
-                "이에요/예요": ["이에요/예요", "이에요예요", "이에요 예요", "에요/예요", "에요예요"],
-                "어떡해/어떻게": ["어떡해/어떻게", "어떡해어떻게", "어떡해 어떻게"],
-                "랜덤": ["랜덤", "혼합", "무작위", "아무거나"]
-            }
-            
-            requested_type = None
-            for type_name, keywords in type_keywords.items():
-                for keyword in keywords:
-                    if keyword in user_input:
-                        requested_type = type_name
-                        break
-                if requested_type:
-                    break
-            
-            if requested_type:
-                # 유형 변경
-                st.session_state.selected_grammar_type = requested_type
-                st.session_state.asked_questions = []  # 제시한 문제 목록 초기화
-                st.session_state.current_quiz_question = None
-                
-                # 새로운 유형의 첫 문제 제시
-                import random
-                if requested_type == "랜덤":
-                    filtered_questions = st.session_state.quiz_questions_data
-                else:
-                    type_mapping = {
-                        "데/대": "데/대",
-                        "되/돼": "되/돼",
-                        "안/않": "안/않",
-                        "이에요/예요": "에요/예요",
-                        "어떡해/어떻게": "어떡해/어떻게"
-                    }
-                    target_type = type_mapping.get(requested_type, requested_type)
-                    filtered_questions = [q for q in st.session_state.quiz_questions_data 
-                                        if q['오류 유형'] == target_type]
-                
-                if filtered_questions:
-                    new_question = random.choice(filtered_questions)
-                    st.session_state.current_quiz_question = new_question
-                    st.session_state.asked_questions.append(new_question['문제'])
-                    
-                    type_display_name = {
-                        "데/대": "데/대",
-                        "되/돼": "되/돼",
-                        "안/않": "안/않",
-                        "이에요/예요": "이에요/예요",
-                        "어떡해/어떻게": "어떡해/어떻게",
-                        "랜덤": "랜덤 (유형 혼합)"
-                    }
-                    
-                    response_text = f"좋아요! {type_display_name.get(requested_type, requested_type)} 유형으로 바꿔드릴게요! 😊\n\n**문제:** {new_question['문제']}\n\n아래 버튼 중에서 올바른 표현을 선택해주세요!"
-                    response_time = datetime.now().strftime("%H:%M")
-                    st.session_state.chat_messages.append({
-                        "role": "assistant",
-                        "content": response_text,
-                        "timestamp": response_time,
-                        "question_data": new_question
-                    })
-            else:
-                # 유형 변경 요청이 아닌 경우 일반 응답
-                response_text = "답변은 아래 버튼을 통해 선택해주세요! 😊"
-                response_time = datetime.now().strftime("%H:%M")
-                st.session_state.chat_messages.append({
-                    "role": "assistant",
-                    "content": response_text,
-                    "timestamp": response_time
-                })
-            
-            st.rerun()
     
     # 버튼 클릭으로 답변이 처리되므로 Gemini 응답 생성은 제거
     # (버튼 클릭 시 즉시 피드백 제공)
