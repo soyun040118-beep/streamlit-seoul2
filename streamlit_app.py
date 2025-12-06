@@ -569,8 +569,9 @@ with st.container(border=True):
                 timer_key = f"auto_next_timer_{question_id}"
                 delay_key = f"auto_next_delay_{question_id}"
                 
-                # 타이머가 설정되어 있으면 체크
-                if st.session_state.get(auto_next_key, False):
+                # 타이머가 설정되어 있는지 확인
+                if auto_next_key in st.session_state and st.session_state[auto_next_key]:
+                    # 타이머 체크
                     current_time = time.time()
                     start_time = st.session_state.get(timer_key, current_time)
                     elapsed = current_time - start_time
@@ -606,6 +607,12 @@ with st.container(border=True):
                         if current_time_for_rerun - last_rerun_time >= 0.1:
                             st.session_state[last_rerun_key] = current_time_for_rerun
                             st.rerun()
+                else:
+                    # 타이머가 설정되지 않았으면 즉시 설정하고 다음 렌더링에서 체크
+                    st.session_state[auto_next_key] = True
+                    st.session_state[timer_key] = time.time()
+                    st.session_state[delay_key] = 1.0  # 1초 딜레이
+                    st.rerun()
             elif feedback_type == "incorrect":
                 st.error(f"❌ 아쉬워요, 정답은 **'{question_data['정답']}'** 입니다.")
                 if submitted_answer:
