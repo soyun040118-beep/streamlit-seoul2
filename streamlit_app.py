@@ -97,12 +97,12 @@ try:
 
         # 모든 경로에서 찾지 못한 경우 기본 로드 시도
         if not loaded:
-            load_dotenv()
+load_dotenv()
         
         GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 except:
     # 폴백: 환경 변수에서 직접 가져오기
-    GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
 # --- 챗봇 관련 함수들 ---
 def get_available_models():
@@ -372,14 +372,14 @@ st.subheader("📊 친구들이 가장 많이 헷갈려요!")
 st.write("어떤 문법을 가장 많이 틀리는지 차트로 확인하고, 중요한 규칙부터 공부해 보세요.")
 
 # 오류 빈도 차트
-chart_data = st.session_state.grammar_df.sort_values(by='빈도 (가상)', ascending=False)
-st.bar_chart(
-    chart_data,
-    x='오류 유형',
-    y='빈도 (가상)',
-    color='#FF4B4B',
-    height=300
-)
+    chart_data = st.session_state.grammar_df.sort_values(by='빈도 (가상)', ascending=False)
+    st.bar_chart(
+        chart_data,
+        x='오류 유형',
+        y='빈도 (가상)',
+        color='#FF4B4B',
+        height=300
+    )
 
 # --- 2-1. 규칙 전체 보기 (개선된 가독성) ---
 st.markdown("---")
@@ -461,7 +461,7 @@ with st.container(border=True):
         question_data = st.session_state.current_question
         st.markdown(f"**문제:** 다음 중 문법적으로 올바른 문장을 고르세요.")
         st.info(f"#### {question_data['문제']}")
-        
+
         # 안내 문구 추가
         st.markdown("""
         <div style="background-color: #e8f4f8; 
@@ -478,9 +478,9 @@ with st.container(border=True):
         # 선택지 생성 및 섞기 (매번 동일하게 섞이도록 시드 고정)
         question_id = hash(question_data['문제'])
         random.seed(question_id)
-        options = question_data['오답들'] + [question_data['정답']]
-        random.shuffle(options)
-        
+            options = question_data['오답들'] + [question_data['정답']]
+            random.shuffle(options)
+            
         # 폼 키를 문제별로 고유하게 생성
         form_key = f"quiz_form_{question_id}"
         radio_key = f"quiz_radio_{question_id}"
@@ -633,7 +633,7 @@ with st.container(border=True):
                     if delay_key in st.session_state:
                         del st.session_state[delay_key]
                     # 피드백 상태 초기화
-                    if 'answer_feedback' in st.session_state:
+        if 'answer_feedback' in st.session_state:
                         del st.session_state['answer_feedback']
                     if 'answer_feedback_question_id' in st.session_state:
                         del st.session_state['answer_feedback_question_id']
@@ -664,7 +664,7 @@ if st.session_state.quiz_history:
                 # 해당 규칙 정보 가져오기
                 rule_info = st.session_state.grammar_df[st.session_state.grammar_df['오류 유형'] == most_common_error].iloc[0]
                 with st.container(border=True):
-                    st.info(f"**규칙:** {rule_info['규칙 설명']}")
+                st.info(f"**규칙:** {rule_info['규칙 설명']}")
                     st.success(f"**올바른 예시:** {rule_info['예시 (맞는 문장)']}")
                     st.error(f"**틀린 예시:** {rule_info['예시 (틀린 문장)']}")
             else:
@@ -676,17 +676,17 @@ incorrect_count = sum(1 for q in st.session_state.get('incorrect_questions', [])
 if incorrect_count > 0:
     st.markdown("---")
     st.subheader("📓 나만의 비밀 오답 노트")
-    
+
     with st.container(border=True):
         st.write(f"퀴즈에서 틀렸던 문제 **{incorrect_count}개**가 있어요. '오답 정복하기' 버튼을 눌러 다시 풀어봐요!")
-        
+
         # 오답 목록을 더 자세하게 표시
         with st.expander(f"📋 오답 목록 보기 ({incorrect_count}개)", expanded=False):
-            for i, q in enumerate(st.session_state.incorrect_questions):
-                if q is None: # 이미 맞힌 문제는 건너뛰기
-                    continue
+        for i, q in enumerate(st.session_state.incorrect_questions):
+            if q is None: # 이미 맞힌 문제는 건너뛰기
+                continue
                 with st.container(border=True):
-                    st.markdown(f"**{i+1}. [{q['오류 유형']}]** {q['문제']}")
+            st.markdown(f"**{i+1}. [{q['오류 유형']}]** {q['문제']}")
                     st.write(f"**정답:** {q['정답']}")
                     if 'user_wrong_answer' in q:
                         st.write(f"**내가 선택한 답:** ~~{q['user_wrong_answer']}~~ ❌")
@@ -694,18 +694,18 @@ if incorrect_count > 0:
 
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("✍️ 오답 정복하기!", type="primary", use_container_width=True):
-                st.session_state.retry_mode = True
-                st.session_state.current_retry_index = 0
+        if st.button("✍️ 오답 정복하기!", type="primary", use_container_width=True):
+            st.session_state.retry_mode = True
+            st.session_state.current_retry_index = 0
                 # 첫 번째 오답 문제로 이동
                 while (st.session_state.current_retry_index < len(st.session_state.incorrect_questions) and 
                        st.session_state.incorrect_questions[st.session_state.current_retry_index] is None):
                     st.session_state.current_retry_index += 1
-                generate_question(retry=True)
-                # 피드백 초기화 및 페이지 새로고침
-                if 'answer_feedback' in st.session_state:
-                    del st.session_state.answer_feedback
-                st.rerun()
+            generate_question(retry=True)
+            # 피드백 초기화 및 페이지 새로고침
+            if 'answer_feedback' in st.session_state:
+                del st.session_state.answer_feedback
+            st.rerun()
         
         with col2:
             if st.button("🗑️ 오답 노트 초기화", use_container_width=True):
@@ -767,27 +767,27 @@ with st.form(form_key, clear_on_submit=False):
 
     if levelup_submitted:
             # 제출 시점에 답변을 session_state에 저장 (이중 확인)
-            for i, q in enumerate(st.session_state.levelup_quiz):
+        for i, q in enumerate(st.session_state.levelup_quiz):
                 radio_value = st.session_state.get(f"levelup_radio_{i}", None)
                 if radio_value is not None:
                     st.session_state.levelup_quiz[i]['user_answer'] = radio_value
 
-            st.session_state.levelup_submitted = True
-            # 채점
-            all_correct = True
-            for q in st.session_state.levelup_quiz:
+        st.session_state.levelup_submitted = True
+        # 채점
+        all_correct = True
+        for q in st.session_state.levelup_quiz:
                 user_ans = q.get('user_answer', None)
                 if user_ans == q['정답']:
-                    q['correct'] = True
-                else:
-                    q['correct'] = False
-                    all_correct = False
-            
-            if all_correct:
-                st.balloons()
-                st.success("### 💯 완벽해요! 모든 확인 문제를 맞혔습니다!")
+                q['correct'] = True
             else:
-                st.warning("### 아쉬워요! 틀린 문제가 있어요. 아래 채점표를 보고 다시 도전해 보세요!")
+                q['correct'] = False
+                all_correct = False
+        
+        if all_correct:
+            st.balloons()
+            st.success("### 💯 완벽해요! 모든 확인 문제를 맞혔습니다!")
+        else:
+            st.warning("### 아쉬워요! 틀린 문제가 있어요. 아래 채점표를 보고 다시 도전해 보세요!")
 
 # 레벨업 퀴즈 제출 후 결과 표시
 if st.session_state.levelup_submitted:
