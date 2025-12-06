@@ -618,43 +618,15 @@ with st.container(border=True):
                 if submitted_answer:
                     st.warning(f"선택하신 답: **'{submitted_answer}'**")
                 
-                # 추가 설명 섹션 (더 자세한 설명)
-                with st.container(border=True):
-                    st.markdown("##### 🔍 왜 틀렸을까요?")
-                    st.markdown(f"**💡 {question_data['오류 유형']} 규칙**")
-                    with st.container(border=True):
-                        st.info(f"**규칙 설명:** {question_data['규칙 설명']}")
-                        st.markdown("---")
-                        st.success(f"**✅ 올바른 답:** {question_data['정답']}")
-                        if submitted_answer:
-                            st.error(f"**❌ 내가 선택한 답:** {submitted_answer}")
-                            # 선택한 답이 왜 틀렸는지 구체적으로 설명
-                            error_type = question_data['오류 유형']
-                            explanation = ""
-                            if error_type == "데/대":
-                                explanation = "**왜 틀렸나요?** '데'는 직접 경험한 사실을 말할 때, '대'는 다른 사람에게 들은 내용을 전달할 때 사용해요. 이 문제에서는 들은 내용이므로 '대'를 써야 해요."
-                            elif error_type == "에요/예요":
-                                explanation = "**왜 틀렸나요?** 받침이 있으면 '이에요', 받침이 없으면 '예요'를 써요. '아니예요'는 항상 틀린 표현이고, '아니에요'가 맞아요."
-                            elif error_type == "어떡해/어떻게":
-                                explanation = "**왜 틀렸나요?** '어떻게'는 방법을 물을 때, '어떡해'는 걱정되는 상황에서 사용해요. 이 문제의 맥락에 맞는 표현을 선택해야 해요."
-                            elif error_type == "되/돼":
-                                explanation = "**왜 틀렸나요?** '되'와 '돼'를 구분하려면 '하' 또는 '해'를 넣어보세요. '해'로 바꿨을 때 말이 되면 '돼', '하'로 바꿨을 때 말이 되면 '되'를 써요. '안되'는 항상 틀린 표현이에요."
-                            elif error_type == "안/않":
-                                explanation = "**왜 틀렸나요?** '안'은 '아니'의 준말이고, '않'은 '아니하다'의 준말이에요. '~하지 않다' 형태가 되면 '않', 그 외 부정은 '안'을 사용해요."
-                            
-                            if explanation:
-                                st.markdown(explanation)
-                        st.error(f"**❌ 틀린 예시:** {question_data['오답들'][0] if question_data['오답들'] else ''}")
-                        # 추가 설명
-                        st.markdown("---")
-                        st.markdown("**📚 기억하기:** 이 규칙을 다시 한번 확인하고 다음 문제에 적용해보세요!")
-                
-                # 문제 계속 풀기 버튼
+                # 문제 이어서 풀기 버튼
                 confirm_key = f"confirm_incorrect_{question_id}"
-                if st.button("문제 계속 풀기", key=confirm_key, type="primary", use_container_width=True):
+                show_explanation = st.session_state.get(f"show_explanation_{question_id}", True)
+                
+                if st.button("문제 이어서 풀기", key=confirm_key, type="primary", use_container_width=True):
                     # 버튼을 누르면 다음 문제로 이동
                     st.session_state[f"is_submitted_{question_id}"] = False
                     st.session_state[f"submitted_answer_{question_id}"] = None
+                    st.session_state[f"show_explanation_{question_id}"] = False
                     # 자동 진행 관련 상태 제거
                     auto_next_key = f"auto_next_question_{question_id}"
                     timer_key = f"auto_next_timer_{question_id}"
@@ -672,10 +644,43 @@ with st.container(border=True):
                         del st.session_state['answer_feedback_question_id']
                     generate_question(st.session_state.retry_mode)
                     st.rerun()
+                
+                # 오답 설명 섹션 (버튼 아래에 배치)
+                if show_explanation:
+                    st.markdown("---")
+                    with st.container(border=True):
+                        st.markdown("##### 🔍 왜 틀렸을까요?")
+                        st.markdown(f"**💡 {question_data['오류 유형']} 규칙**")
+                        with st.container(border=True):
+                            st.info(f"**규칙 설명:** {question_data['규칙 설명']}")
+                            st.markdown("---")
+                            st.success(f"**✅ 올바른 답:** {question_data['정답']}")
+                            if submitted_answer:
+                                st.error(f"**❌ 내가 선택한 답:** {submitted_answer}")
+                                # 선택한 답이 왜 틀렸는지 구체적으로 설명
+                                error_type = question_data['오류 유형']
+                                explanation = ""
+                                if error_type == "데/대":
+                                    explanation = "**왜 틀렸나요?** '데'는 직접 경험한 사실을 말할 때, '대'는 다른 사람에게 들은 내용을 전달할 때 사용해요. 이 문제에서는 들은 내용이므로 '대'를 써야 해요."
+                                elif error_type == "에요/예요":
+                                    explanation = "**왜 틀렸나요?** 받침이 있으면 '이에요', 받침이 없으면 '예요'를 써요. '아니예요'는 항상 틀린 표현이고, '아니에요'가 맞아요."
+                                elif error_type == "어떡해/어떻게":
+                                    explanation = "**왜 틀렸나요?** '어떻게'는 방법을 물을 때, '어떡해'는 걱정되는 상황에서 사용해요. 이 문제의 맥락에 맞는 표현을 선택해야 해요."
+                                elif error_type == "되/돼":
+                                    explanation = "**왜 틀렸나요?** '되'와 '돼'를 구분하려면 '하' 또는 '해'를 넣어보세요. '해'로 바꿨을 때 말이 되면 '돼', '하'로 바꿨을 때 말이 되면 '되'를 써요. '안되'는 항상 틀린 표현이에요."
+                                elif error_type == "안/않":
+                                    explanation = "**왜 틀렸나요?** '안'은 '아니'의 준말이고, '않'은 '아니하다'의 준말이에요. '~하지 않다' 형태가 되면 '않', 그 외 부정은 '안'을 사용해요."
+                                
+                                if explanation:
+                                    st.markdown(explanation)
+                            st.error(f"**❌ 틀린 예시:** {question_data['오답들'][0] if question_data['오답들'] else ''}")
+                            # 추가 설명
+                            st.markdown("---")
+                            st.markdown("**📚 기억하기:** 이 규칙을 다시 한번 확인하고 다음 문제에 적용해보세요!")
 
 # --- 6. 오답 유형 분석 및 추천 ---
-# 오답이 있으면 약점 분석 표시 (오답 처리 후에도 계속 표시)
-if st.session_state.quiz_history:
+# 오답이 있고, 오답을 처리한 후에만 약점 분석 표시
+if st.session_state.quiz_history and st.session_state.get('answer_feedback') == 'incorrect':
     st.markdown("---")
     st.subheader("📈 나의 약점 분석!")
 
