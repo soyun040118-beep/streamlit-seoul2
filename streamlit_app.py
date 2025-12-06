@@ -418,6 +418,27 @@ def generate_question():
     question_data['규칙 설명'] = rule_info_series['규칙 설명']
     st.session_state.current_question = question_data
 
+def generate_question_from_incorrect():
+    """틀린 문제 목록에서 랜덤으로 문제를 생성합니다."""
+    incorrect_questions = st.session_state.get('incorrect_questions', [])
+    if len(incorrect_questions) == 0:
+        return False
+    
+    # 오답 목록에서 랜덤으로 선택
+    selected_incorrect = random.choice(incorrect_questions)
+    
+    # 규칙 설명 추가
+    rule_info_series = st.session_state.grammar_df[st.session_state.grammar_df['오류 유형'] == selected_incorrect['오류 유형']].iloc[0]
+    question_data = selected_incorrect.copy()
+    question_data['규칙 설명'] = rule_info_series['규칙 설명']
+    
+    # user_wrong_answer는 제거 (새로운 문제로)
+    if 'user_wrong_answer' in question_data:
+        del question_data['user_wrong_answer']
+    
+    st.session_state.current_question = question_data
+    return True
+
 with st.container(border=True):
     st.write("아래 버튼을 눌러 나의 문법 실력을 테스트해 보세요. 올바른 문장을 선택하면 됩니다.")
     st.write("문법에 자신감이 생길때까지 '새로운 문제 퀴즈' 풀기 버튼을 눌러 학습해봅시다! 버튼을 누르면 문제가 랜덤으로 나와요!")
@@ -586,34 +607,10 @@ with st.container(border=True):
                 if submitted_answer:
                     st.warning(f"선택하신 답: **'{submitted_answer}'**")
                 
-                # 문제 이어서 풀기 버튼
+                # 오답 설명 섹션
                 confirm_key = f"confirm_incorrect_{question_id}"
                 show_explanation = st.session_state.get(f"show_explanation_{question_id}", True)
                 
-                if st.button("이어서 문제 풀기", key=confirm_key, type="primary", use_container_width=True):
-                    # 버튼을 누르면 규칙 제시 부분 없애고 다음 문제로 이동
-                    st.session_state[f"is_submitted_{question_id}"] = False
-                    st.session_state[f"submitted_answer_{question_id}"] = None
-                    st.session_state[f"show_explanation_{question_id}"] = False
-                    # 자동 진행 관련 상태 제거
-                    auto_next_key = f"auto_next_question_{question_id}"
-                    timer_key = f"auto_next_timer_{question_id}"
-                    delay_key = f"auto_next_delay_{question_id}"
-                    if auto_next_key in st.session_state:
-                        del st.session_state[auto_next_key]
-                    if timer_key in st.session_state:
-                        del st.session_state[timer_key]
-                    if delay_key in st.session_state:
-                        del st.session_state[delay_key]
-                    # 피드백 상태 초기화
-                    if 'answer_feedback' in st.session_state:
-                        del st.session_state['answer_feedback']
-                    if 'answer_feedback_question_id' in st.session_state:
-                        del st.session_state['answer_feedback_question_id']
-                    generate_question()
-                    st.rerun()
-                
-                # 오답 설명 섹션 (버튼 아래에 배치, 버튼 누르면 사라짐)
                 if show_explanation:
                     st.markdown("---")
                     with st.container(border=True):
@@ -641,10 +638,33 @@ with st.container(border=True):
                                 
                                 if explanation:
                                     st.markdown(explanation)
-                            st.error(f"**❌ 틀린 예시:** {question_data['오답들'][0] if question_data['오답들'] else ''}")
                             # 추가 설명
                             st.markdown("---")
                             st.markdown("**📚 기억하기:** 이 규칙을 다시 한번 확인하고 다음 문제에 적용해보세요!")
+                    
+                    # 이어서 문제 풀기 버튼 (왜 틀렸을까요? 섹션 이후에 배치)
+                    if st.button("이어서 문제 풀기", key=confirm_key, type="primary", use_container_width=True):
+                        # 버튼을 누르면 규칙 제시 부분 없애고 다음 문제로 이동
+                        st.session_state[f"is_submitted_{question_id}"] = False
+                        st.session_state[f"submitted_answer_{question_id}"] = None
+                        st.session_state[f"show_explanation_{question_id}"] = False
+                        # 자동 진행 관련 상태 제거
+                        auto_next_key = f"auto_next_question_{question_id}"
+                        timer_key = f"auto_next_timer_{question_id}"
+                        delay_key = f"auto_next_delay_{question_id}"
+                        if auto_next_key in st.session_state:
+                            del st.session_state[auto_next_key]
+                        if timer_key in st.session_state:
+                            del st.session_state[timer_key]
+                        if delay_key in st.session_state:
+                            del st.session_state[delay_key]
+                        # 피드백 상태 초기화
+                        if 'answer_feedback' in st.session_state:
+                            del st.session_state['answer_feedback']
+                        if 'answer_feedback_question_id' in st.session_state:
+                            del st.session_state['answer_feedback_question_id']
+                        generate_question()
+                        st.rerun()
 
 # --- 6. 나만의 오답 노트 ---
 # 오답이 있으면 오답 노트 표시
@@ -655,6 +675,26 @@ if incorrect_count > 0:
 
     with st.container(border=True):
         st.write(f"틀렸던 문제 **{incorrect_count}개**")
+        
+        # 틀린 문제 다시 풀기 버튼
+        col_retry1, col_retry2 = st.columns([1, 1])
+        with col_retry1:
+            if st.button("🔄 틀린 문제 다시 풀기", use_container_width=True, type="primary"):
+                if generate_question_from_incorrect():
+                    # 이전 답변 결과 메시지 초기화
+                    if 'answer_feedback' in st.session_state:
+                        del st.session_state['answer_feedback']
+                    st.rerun()
+                else:
+                    st.warning("틀린 문제가 없어요. 먼저 퀴즈를 풀어보세요!")
+        
+        with col_retry2:
+            if st.button("🎲 새로운 랜덤 문제", use_container_width=True):
+                generate_question()
+                # 이전 답변 결과 메시지 초기화
+                if 'answer_feedback' in st.session_state:
+                    del st.session_state['answer_feedback']
+                st.rerun()
         
         # 오답 유형 분석 그래프 (약점 분석 통합)
         if st.session_state.quiz_history:
