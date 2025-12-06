@@ -74,9 +74,6 @@ def get_quiz_data():
         {'오류 유형': '안/않', '문제': '몸이 좋지 [안/않]아서 병원에 갔다.', '정답': '몸이 좋지 않아서 병원에 갔다.', '오답들': ['몸이 좋지 안아서 병원에 갔다.']},
         {'오류 유형': '안/않', '문제': '그 소식은 확실하지 [안/않]다.', '정답': '그 소식은 확실하지 않다.', '오답들': ['그 소식은 확실하지 안다.']},
         {'오류 유형': '안/않', '문제': '그 문제는 해결하기 쉽지 [안/않]았다.', '정답': '그 문제는 해결하기 쉽지 않았다.', '오답들': ['그 문제는 해결하기 쉽지 안았다.']},
-        # 구분 방법 질문 (챗봇용)
-        {'오류 유형': '되/돼', '문제': '되/돼를 구분하는 방법은 무엇인가요?', '정답': '하 또는 해를 넣어보세요', '오답들': []},
-        {'오류 유형': '에요/예요', '문제': '이에요, 예요를 구분하는 방법은 무엇인가요?', '정답': '받침이 있으면 이에요, 받침이 없으면 예요', '오답들': []},
     ]
     return pd.DataFrame(quiz_data)
 
@@ -1037,67 +1034,77 @@ else:
             correct_answer = current_question_data['정답']
             wrong_answers = current_question_data.get('오답들', [])
             
-            # 틀린 문장(오답) 확보
+            # 틀린 문장(오답) 확보 - 현재 문제와 관련된 틀린 문장만 사용
             wrong_answer = None
             
-            # 1. 먼저 문제 데이터에 있는 오답 사용
+            # 1. 먼저 문제 데이터에 있는 오답 사용 (현재 문제의 틀린 문장 예시)
             if len(wrong_answers) > 0:
                 wrong_answer = wrong_answers[0]
             else:
-                # 2. 다른 문제의 오답 가져오기
-                other_questions = [q for q in st.session_state.quiz_questions_data 
-                                 if q['문제'] != current_question_data['문제']]
-                for other_q in random.sample(other_questions, min(len(other_questions), 5)):
-                    other_wrong = other_q.get('오답들', [])
-                    if other_wrong and other_wrong[0] != correct_answer:
-                        wrong_answer = other_wrong[0]
-                        break
+                # 2. 문제 데이터에 오답이 없으면 정답을 변형해서 현재 문제와 관련된 틀린 문장 생성
+                # 문제 텍스트에서 [선택지] 부분을 찾아서 반대 선택지로 변형
+                problem_text = current_question_data['문제']
+                correct_text = current_question_data['정답']
                 
-                # 3. 그래도 없으면 정답을 여러 방법으로 변형 시도
+                # 문제에서 선택지 부분 찾기
+                if '[이에요/예요]' in problem_text or '[예요/이에요]' in problem_text:
+                    if '이에요' in correct_text:
+                        wrong_answer = correct_text.replace('이에요', '예요')
+                    elif '예요' in correct_text:
+                        wrong_answer = correct_text.replace('예요', '이에요')
+                elif '[데/대]' in problem_text or '[대/데]' in problem_text:
+                    if '데' in correct_text:
+                        wrong_answer = correct_text.replace('데', '대')
+                    elif '대' in correct_text:
+                        wrong_answer = correct_text.replace('대', '데')
+                elif '[어떡해/어떻게]' in problem_text or '[어떻게/어떡해]' in problem_text:
+                    if '어떻게' in correct_text:
+                        wrong_answer = correct_text.replace('어떻게', '어떡해')
+                    elif '어떡해' in correct_text:
+                        wrong_answer = correct_text.replace('어떡해', '어떻게')
+                elif '[되/돼]' in problem_text or '[돼/되]' in problem_text or '[될/됄]' in problem_text or '[됄/될]' in problem_text:
+                    if '되' in correct_text and '돼' not in correct_text:
+                        wrong_answer = correct_text.replace('되', '돼')
+                    elif '돼' in correct_text:
+                        wrong_answer = correct_text.replace('돼', '되')
+                    elif '될' in correct_text:
+                        wrong_answer = correct_text.replace('될', '됄')
+                    elif '됄' in correct_text:
+                        wrong_answer = correct_text.replace('됄', '될')
+                elif '[안/않]' in problem_text or '[않/안]' in problem_text:
+                    if '안' in correct_text and '않' not in correct_text:
+                        wrong_answer = correct_text.replace('안', '않')
+                    elif '않' in correct_text:
+                        wrong_answer = correct_text.replace('않', '안')
+                
+                # 변형이 실패했거나 정답과 같으면 다른 방법 시도
                 if wrong_answer is None or wrong_answer == correct_answer:
-                    # 다양한 변형 방법 시도
+                    # 정답에서 직접 변형 시도
                     variations = [
-                        correct_answer.replace('예요', '에요'),
-                        correct_answer.replace('에요', '예요'),
-                        correct_answer.replace('이에요', '예요'),
-                        correct_answer.replace('예요', '이에요'),
-                        correct_answer.replace('되', '돼'),
-                        correct_answer.replace('돼', '되'),
-                        correct_answer.replace('어떻게', '어떡해'),
-                        correct_answer.replace('어떡해', '어떻게'),
-                        correct_answer.replace('데', '대'),
-                        correct_answer.replace('대', '데'),
+                        correct_text.replace('예요', '에요'),
+                        correct_text.replace('에요', '예요'),
+                        correct_text.replace('이에요', '예요'),
+                        correct_text.replace('예요', '이에요'),
+                        correct_text.replace('되', '돼'),
+                        correct_text.replace('돼', '되'),
+                        correct_text.replace('어떻게', '어떡해'),
+                        correct_text.replace('어떡해', '어떻게'),
+                        correct_text.replace('데', '대'),
+                        correct_text.replace('대', '데'),
+                        correct_text.replace('안', '않'),
+                        correct_text.replace('않', '안'),
                     ]
                     for var in variations:
-                        if var != correct_answer and len(var) > 0:
+                        if var != correct_text and len(var) > 0:
                             wrong_answer = var
                             break
-                
-                # 4. 그래도 실패하면 기본 틀린 문장 생성
-                if wrong_answer is None or wrong_answer == correct_answer:
-                    # 정답과 확실히 다른 기본 틀린 문장 생성
-                    if '어떻게' in correct_answer:
-                        wrong_answer = correct_answer.replace('어떻게', '어떡해')
-                    elif '어떡해' in correct_answer:
-                        wrong_answer = correct_answer.replace('어떡해', '어떻게')
-                    elif '이에요' in correct_answer:
-                        wrong_answer = correct_answer.replace('이에요', '예요')
-                    elif '예요' in correct_answer and '아니' not in correct_answer:
-                        wrong_answer = correct_answer.replace('예요', '이에요')
-                    elif '되' in correct_answer:
-                        wrong_answer = correct_answer.replace('되', '돼')
-                    elif '돼' in correct_answer:
-                        wrong_answer = correct_answer.replace('돼', '되')
-                    else:
-                        # 최후의 수단: 정답 앞에 "틀린: " 추가 (하지만 이건 이상하니까 다른 방법)
-                        # 대신 다른 문제의 정답을 틀린 답으로 사용
-                        if other_questions:
-                            wrong_answer = random.choice(other_questions)['정답']
             
             # 최종 확인: 틀린 문장이 정답과 다르도록 보장
-            if wrong_answer == correct_answer:
-                # 강제로 다른 문장 생성
-                wrong_answer = "틀린 문장입니다"
+            if wrong_answer is None or wrong_answer == correct_answer:
+                # 강제로 다른 문장 생성 (현재 문제의 정답을 약간 변형)
+                wrong_answer = correct_text.replace('이에요', '예요').replace('예요', '이에요').replace('되', '돼').replace('돼', '되')
+                if wrong_answer == correct_text:
+                    wrong_answer = "틀린 문장입니다"
             
             # 틀린 문장(오답) 1개 + 정답 1개 + '모르겠어요'로 구성
             options = [wrong_answer, correct_answer, "모르겠어요"]
