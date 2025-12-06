@@ -569,9 +569,14 @@ with st.container(border=True):
                 timer_key = f"auto_next_timer_{question_id}"
                 delay_key = f"auto_next_delay_{question_id}"
                 
-                # 타이머가 설정되어 있는지 확인
+                # 타이머 초기화 (처음 정답을 맞췄을 때만)
+                if timer_key not in st.session_state:
+                    st.session_state[auto_next_key] = True
+                    st.session_state[timer_key] = time.time()
+                    st.session_state[delay_key] = 1.0  # 1초 딜레이
+                
+                # 타이머 체크
                 if auto_next_key in st.session_state and st.session_state[auto_next_key]:
-                    # 타이머 체크
                     current_time = time.time()
                     start_time = st.session_state.get(timer_key, current_time)
                     elapsed = current_time - start_time
@@ -607,12 +612,6 @@ with st.container(border=True):
                         if current_time_for_rerun - last_rerun_time >= 0.1:
                             st.session_state[last_rerun_key] = current_time_for_rerun
                             st.rerun()
-                else:
-                    # 타이머가 설정되지 않았으면 즉시 설정하고 다음 렌더링에서 체크
-                    st.session_state[auto_next_key] = True
-                    st.session_state[timer_key] = time.time()
-                    st.session_state[delay_key] = 1.0  # 1초 딜레이
-                    st.rerun()
             elif feedback_type == "incorrect":
                 st.error(f"❌ 아쉬워요, 정답은 **'{question_data['정답']}'** 입니다.")
                 if submitted_answer:
@@ -679,8 +678,8 @@ with st.container(border=True):
                             st.markdown("**📚 기억하기:** 이 규칙을 다시 한번 확인하고 다음 문제에 적용해보세요!")
 
 # --- 6. 오답 유형 분석 및 추천 ---
-# 오답이 있고, 오답을 처리한 후에만 약점 분석 표시
-if st.session_state.quiz_history and st.session_state.get('answer_feedback') == 'incorrect':
+# 오답이 있으면 약점 분석 표시
+if st.session_state.quiz_history:
     st.markdown("---")
     st.subheader("📈 나의 약점 분석!")
 
