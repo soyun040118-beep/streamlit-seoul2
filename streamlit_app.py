@@ -533,8 +533,6 @@ with st.container(border=True):
                         st.session_state[f"auto_next_question_{question_id}"] = True
                         st.session_state[f"auto_next_timer_{question_id}"] = time.time()
                         st.session_state[f"auto_next_delay_{question_id}"] = 1.0  # 1초 딜레이
-                        # 폼 안에서 즉시 정답 피드백 표시
-                        st.success("🎉 정답입니다!")
                     else:
                         st.session_state.answer_feedback = "incorrect"
                         st.session_state.answer_feedback_question_id = question_id
@@ -551,9 +549,6 @@ with st.container(border=True):
                             incorrect_q = question_data.copy()
                             incorrect_q['user_wrong_answer'] = user_answer
                             st.session_state.incorrect_questions.append(incorrect_q)
-                        # 폼 안에서 즉시 오답 피드백 표시
-                        st.error(f"❌ 아쉬워요, 정답은 **'{question_data['정답']}'** 입니다.")
-                        st.info("💡 아래에서 틀린 이유를 확인하고 '틀린 이유 확인' 버튼을 눌러주세요.")
                     
                     # 폼 제출 후 즉시 rerun하여 피드백 표시
                     st.rerun()
@@ -590,6 +585,10 @@ with st.container(border=True):
                             del st.session_state[timer_key]
                         if delay_key in st.session_state:
                             del st.session_state[delay_key]
+                        # last_rerun_key도 정리
+                        last_rerun_key = f"last_rerun_{question_id}"
+                        if last_rerun_key in st.session_state:
+                            del st.session_state[last_rerun_key]
                         # 피드백 상태 초기화
                         if 'answer_feedback' in st.session_state:
                             del st.session_state['answer_feedback']
@@ -598,10 +597,15 @@ with st.container(border=True):
                         generate_question(st.session_state.retry_mode)
                         st.rerun()
                     else:
-                        # 아직 시간이 안 지났으면 잠시 후 다시 렌더링
-                        # 1초 딜레이이므로 카운트다운 메시지는 표시하지 않음
-                        # 자동으로 다시 렌더링하여 타이머 업데이트
-                        st.rerun()
+                        # 아직 시간이 안 지났으면 자동으로 다시 렌더링하여 타이머 업데이트
+                        # 무한 루프 방지를 위해 최소 간격 체크
+                        last_rerun_key = f"last_rerun_{question_id}"
+                        last_rerun_time = st.session_state.get(last_rerun_key, 0)
+                        current_time_for_rerun = time.time()
+                        # 0.1초 이상 지났을 때만 rerun (무한 루프 방지)
+                        if current_time_for_rerun - last_rerun_time >= 0.1:
+                            st.session_state[last_rerun_key] = current_time_for_rerun
+                            st.rerun()
             elif feedback_type == "incorrect":
                 st.error(f"❌ 아쉬워요, 정답은 **'{question_data['정답']}'** 입니다.")
                 if submitted_answer:
