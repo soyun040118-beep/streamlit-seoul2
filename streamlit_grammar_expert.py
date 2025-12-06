@@ -125,9 +125,9 @@ def get_detailed_grammar_explanation(word_or_phrase: str) -> list:
     
     for category, rules in GRAMMAR_RULES_DB.items():
         for rule in rules.get("규칙", []):
+            # 정확한 키워드 매칭 (오류 방지)
             if (search_term in rule.get("틀린예", "").lower() or
                 search_term in rule.get("맞는예", "").lower() or
-                search_term in rule.get("설명", "").lower() or
                 search_term in rule.get("원칙", "").lower()):
                 explanations.append({
                     "카테고리": category,
@@ -138,6 +138,93 @@ def get_detailed_grammar_explanation(word_or_phrase: str) -> list:
                 })
     
     return explanations
+
+def analyze_error_precisely(original_word: str, corrected_word: str) -> dict:
+    """오류를 정확히 분석하여 관련 규칙을 찾는다."""
+    result = {
+        "found": False,
+        "category": None,
+        "rule": None,
+        "explanation": None,
+        "wrong_example": None,
+        "correct_example": None
+    }
+    
+    # 5가지 핵심 규칙별 정확한 매칭
+    # 1. 데/대 구분
+    if original_word in ['대', '데'] or '대' in original_word or '데' in original_word:
+        if 'GRAMMAR_RULES_DB' in dir():
+            for rule in GRAMMAR_RULES_DB.get("데/대_구분", {}).get("규칙", []):
+                result = {
+                    "found": True,
+                    "category": "데/대 구분",
+                    "rule": rule.get("원칙"),
+                    "explanation": rule.get("설명"),
+                    "wrong_example": rule.get("틀린예"),
+                    "correct_example": rule.get("맞는예")
+                }
+                return result
+    
+    # 2. 이에요/예요 구분
+    if original_word in ['예요', '이에요', '아니예요', '아니에요'] or '예요' in original_word or '이에요' in original_word:
+        if original_word == '아니예요':
+            rule = GRAMMAR_RULES_DB.get("이에요_예요_구분", {}).get("규칙", [])[1]
+        else:
+            rule = GRAMMAR_RULES_DB.get("이에요_예요_구분", {}).get("규칙", [])[0]
+        
+        result = {
+            "found": True,
+            "category": "이에요/예요 구분",
+            "rule": rule.get("원칙"),
+            "explanation": rule.get("설명"),
+            "wrong_example": rule.get("틀린예"),
+            "correct_example": rule.get("맞는예")
+        }
+        return result
+    
+    # 3. 어떡해/어떻게 구분
+    if '어떡해' in original_word or '어떻게' in original_word:
+        for rule in GRAMMAR_RULES_DB.get("어떡해_어떻게_구분", {}).get("규칙", []):
+            if original_word in rule.get("틀린예", "").lower():
+                result = {
+                    "found": True,
+                    "category": "어떡해/어떻게 구분",
+                    "rule": rule.get("원칙"),
+                    "explanation": rule.get("설명"),
+                    "wrong_example": rule.get("틀린예"),
+                    "correct_example": rule.get("맞는예")
+                }
+                return result
+    
+    # 4. 되/돼 구분
+    if original_word in ['돼', '되'] or '돼' in original_word or '되' in original_word:
+        for rule in GRAMMAR_RULES_DB.get("되_돼_구분", {}).get("규칙", []):
+            if original_word in rule.get("틀린예", "").lower():
+                result = {
+                    "found": True,
+                    "category": "되/돼 구분",
+                    "rule": rule.get("원칙"),
+                    "explanation": rule.get("설명"),
+                    "wrong_example": rule.get("틀린예"),
+                    "correct_example": rule.get("맞는예")
+                }
+                return result
+    
+    # 5. 안/않 구분
+    if original_word in ['안', '않'] or '안' in original_word or '않' in original_word:
+        for rule in GRAMMAR_RULES_DB.get("안_않_구분", {}).get("규칙", []):
+            if original_word in rule.get("틀린예", "").lower():
+                result = {
+                    "found": True,
+                    "category": "안/않 구분",
+                    "rule": rule.get("원칙"),
+                    "explanation": rule.get("설명"),
+                    "wrong_example": rule.get("틀린예"),
+                    "correct_example": rule.get("맞는예")
+                }
+                return result
+    
+    return result
 
 # --- 페이지 기본 설정 ---
 st.set_page_config(
@@ -200,20 +287,24 @@ with tab1:
                             error_type = error_info[0]
                             corrected_word = error_info[1]
                             
-                            with st.expander(f"❌ '{original_word}' → ✅ '{corrected_word}'"):
+                            with st.expander(f"❌ '{original_word}' → ✅ '{corrected_word}'", expanded=True):
                                 st.markdown(f"**오류 유형**: `{error_type}`")
-                                st.markdown(f"**올바른 표현**: {corrected_word}")
+                                st.markdown(f"**올바른 표현**: `{corrected_word}`")
                                 
-                                grammar_explanations = get_detailed_grammar_explanation(original_word)
+                                # 정확한 문법 설명 검색
+                                error_analysis = analyze_error_precisely(original_word, corrected_word)
                                 
-                                if grammar_explanations:
-                                    st.markdown("**📚 관련 문법 규칙**")
-                                    for explanation in grammar_explanations:
-                                        st.markdown(f"### {explanation['카테고리'].replace('_', '/')}")
-                                        st.markdown(f"**원칙**: {explanation['원칙']}")
-                                        st.markdown(f"**설명**: {explanation['설명']}")
-                                        st.error(f"❌ 틀린 예: {explanation['틀린예']}")
-                                        st.success(f"✅ 맞는 예: {explanation['맞는예']}")
+                                if error_analysis.get("found"):
+                                    st.markdown("---")
+                                    st.markdown("**📚 적용되는 문법 규칙**")
+                                    st.markdown(f"**규칙**: {error_analysis['rule']}")
+                                    st.markdown(f"**설명**: {error_analysis['explanation']}")
+                                    st.markdown("---")
+                                    st.error(f"❌ 틀린 예: {error_analysis['wrong_example']}")
+                                    st.success(f"✅ 맞는 예: {error_analysis['correct_example']}")
+                                else:
+                                    # 기본 안내
+                                    st.info("이 오류는 5가지 핵심 규칙 중 하나에 해당합니다. '5가지 규칙 완전 학습' 탭에서 더 자세히 배워보세요!")
                             
                             st.session_state.errors.append({
                                 "틀린 단어": original_word,
