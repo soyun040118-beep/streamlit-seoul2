@@ -422,8 +422,16 @@ st.subheader("📝 도전! 문법 퀴즈")
 
 def generate_question():
     """랜덤 퀴즈 문제를 생성합니다."""
+    # "도전! 문법 퀴즈"에서는 구분 방법 질문 제외
+    filtered_quiz_df = st.session_state.quiz_df[
+        ~st.session_state.quiz_df['문제'].isin([
+            '되/돼를 구분하는 방법은 무엇인가요?',
+            '이에요, 예요를 구분하는 방법은 무엇인가요?'
+        ])
+    ]
+    
     # 퀴즈 데이터에서 랜덤으로 문제 샘플링
-    quiz_question_series = st.session_state.quiz_df.sample(1).iloc[0]
+    quiz_question_series = filtered_quiz_df.sample(1).iloc[0]
     rule_info_series = st.session_state.grammar_df[st.session_state.grammar_df['오류 유형'] == quiz_question_series['오류 유형']].iloc[0]
     
     question_data = quiz_question_series.to_dict()
@@ -476,7 +484,7 @@ with st.container(border=True):
                     margin: 10px 0;
                     font-size: 16px;
                     color: #2c3e50;">
-            💡 <strong>알맞은 답을 고르면 저절로 다음 문제로 넘어가고, 틀린 답을 고르면 나만의 오답노트가 생성돼요!</strong>
+            💡 <strong>알맞은 답을 고르면 다음 문제로 넘어가고, 틀린 답을 고르면 나만의 오답노트가 생성돼요!</strong>
         </div>
         """, unsafe_allow_html=True)
 
