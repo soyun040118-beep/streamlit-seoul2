@@ -418,8 +418,6 @@ def generate_question():
     question_data['규칙 설명'] = rule_info_series['규칙 설명']
     st.session_state.current_question = question_data
 
-# 퀴즈 모드에 따라 제목 변경
-quiz_title = "오답 다시 풀어보기" if st.session_state.retry_mode else "나의 문법 실력 최종 점검! (퀴즈)"
 with st.container(border=True):
     st.write("아래 버튼을 눌러 나의 문법 실력을 테스트해 보세요. 올바른 문장을 선택하면 됩니다.")
     st.write("문법에 자신감이 생길때까지 '새로운 문제 퀴즈' 풀기 버튼을 눌러 학습해봅시다! 버튼을 누르면 문제가 랜덤으로 나와요!")
