@@ -441,6 +441,7 @@ def generate_question(retry=False):
 quiz_title = "오답 다시 풀어보기" if st.session_state.retry_mode else "나의 문법 실력 최종 점검! (퀴즈)"
 with st.container(border=True):
     st.write("아래 버튼을 눌러 나의 문법 실력을 테스트해 보세요. 올바른 문장을 선택하면 됩니다.")
+    st.write("문법에 자신감이 생길때까지 '새로운 문제 퀴즈' 풀기 버튼을 눌러 학습해봅시다! 버튼을 누르면 문제가 랜덤으로 나와요!")
 
     if st.button("🎲 새로운 퀴즈 풀기!", use_container_width=True):
         # 오답 모드가 아니거나, 오답이 없을 때만 일반 퀴즈 시작
@@ -617,7 +618,7 @@ with st.container(border=True):
                 
                 # 틀린 이유 확인 버튼
                 confirm_key = f"confirm_incorrect_{question_id}"
-                if st.button("✅ 틀린 이유 확인", key=confirm_key, type="primary", use_container_width=True):
+                if st.button("다시 알맞은 정답 고르러가기", key=confirm_key, type="primary", use_container_width=True):
                     # 버튼을 누르면 다음 문제로 이동
                     st.session_state[f"is_submitted_{question_id}"] = False
                     st.session_state[f"submitted_answer_{question_id}"] = None
