@@ -902,41 +902,28 @@ with st.container(border=True):
     </div>
     """, unsafe_allow_html=True)
     
-    # 질문 형식 예시 추가
-    with st.expander("💡 올바른 질문 형식 예시", expanded=False):
-        st.markdown("""
-        **좋은 질문 형식:**
-        
-        1. **구체적인 문장 제시:**
-           - "이 문장이 맞나요? '저는 학생예요.'"
-           - "'안되'와 '안돼' 중 어느 것이 맞나요?"
-        
-        2. **문법 규칙 질문:**
-           - "'에요'와 '예요'의 차이점을 알려주세요."
-           - "'되'와 '돼'를 구분하는 방법을 설명해주세요."
-        
-        3. **맞춤법 확인:**
-           - "'어떡해'와 '어떻게' 중 어떤 것이 맞나요?"
-           - "이 문장의 맞춤법을 확인해주세요: '그러면 안되.'"
-        
-        4. **예시 문장과 함께:**
-           - "'아니예요'와 '아니에요' 중 어느 것이 맞나요? 예: '아니예요, 괜찮아요.'"
-        
-        **피해야 할 질문:**
-        - 너무 모호한 질문: "문법 알려줘"
-        - 여러 질문을 한 번에: "에요 예요 되 돼 안 않 모두 알려줘"
-        
-        💡 **팁:** 구체적인 문장이나 단어를 제시하면 더 정확한 답변을 받을 수 있어요!
-        """)
+    # 챗봇 설명
+    st.info("💡 챗봇이 문법 문제를 제시하면, 여러분이 답변해주세요! 정답 여부를 확인하고 친절하게 설명해드릴게요.")
 
 # API 키 확인
 if not GOOGLE_API_KEY or GOOGLE_API_KEY == "여기에 실제 구글 API 키를 입력하세요":
     st.error("앗! 구글 API 키가 설정되지 않았어요. .env 파일을 확인해주세요.")
 else:
-    # 세션 상태에 대화 기록 초기화
+    # 세션 상태에 대화 기록 및 문제 상태 초기화
     if "chat_messages" not in st.session_state:
         st.session_state.chat_messages = []
-    
+    if "current_quiz_question" not in st.session_state:
+        st.session_state.current_quiz_question = None
+    if "quiz_questions_data" not in st.session_state:
+        # 문제 데이터를 챗봇에게 제공할 형식으로 변환
+        quiz_list = []
+        for idx, row in st.session_state.quiz_df.iterrows():
+            quiz_list.append({
+                "문제": row['문제'],
+                "정답": row['정답'],
+                "오류 유형": row['오류 유형']
+            })
+        st.session_state.quiz_questions_data = quiz_list
     
     # 대화 기록 컨테이너
     chat_container = st.container()
@@ -969,8 +956,26 @@ else:
                 </div>
                 """, unsafe_allow_html=True)
     
+    # 챗봇이 문제를 제시하지 않았으면 첫 문제 제시
+    if not st.session_state.chat_messages:
+        # 랜덤 문제 선택
+        import random
+        current_question = random.choice(st.session_state.quiz_questions_data)
+        st.session_state.current_quiz_question = current_question
+        
+        # 챗봇이 문제 제시
+        question_text = f"안녕하세요! 문법 문제를 풀어볼까요? 😊\n\n**문제:** {current_question['문제']}\n\n이 문장에서 올바른 표현을 선택해주세요!"
+        current_time = datetime.now().strftime("%H:%M")
+        st.session_state.chat_messages.append({
+            "role": "assistant",
+            "content": question_text,
+            "timestamp": current_time,
+            "question_data": current_question
+        })
+        st.rerun()
+    
     # 사용자 입력을 위한 채팅 입력창
-    if prompt := st.chat_input("맞춤법이나 문법이 궁금한 문장을 입력해봐!"):
+    if prompt := st.chat_input("답변을 입력해주세요!"):
         # 현재 시간 가져오기
         current_time = datetime.now().strftime("%H:%M")
         
@@ -1002,43 +1007,62 @@ else:
                         role = "model" if msg["role"] == "assistant" else "user"
                         conversation_history.append({"role": role, "parts": [{"text": msg["content"]}]})
     
+                    # 현재 문제 데이터 가져오기
+                    current_question_data = None
+                    for msg in reversed(st.session_state.chat_messages):
+                        if msg.get("question_data"):
+                            current_question_data = msg["question_data"]
+                            break
+                    
+                    # 문제 데이터를 챗봇에게 제공
+                    questions_text = "다음은 여러 문법 문제와 정답 목록이야:\n\n"
+                    for q in st.session_state.quiz_questions_data:
+                        questions_text += f"- 문제: {q['문제']} → 정답: {q['정답']} (오류 유형: {q['오류 유형']})\n"
+                    questions_text += "\n"
+                    
+                    # 현재 문제 정보
+                    current_question_info = ""
+                    if current_question_data:
+                        current_question_info = f"\n**현재 제시한 문제:**\n문제: {current_question_data['문제']}\n정답: {current_question_data['정답']}\n오류 유형: {current_question_data['오류 유형']}\n\n"
+                    
                     # 마지막 사용자 메시지 앞에 페르소나 프롬프트 추가
                     system_prompt = (
                         "너는 문법을 완벽하게 마스터한 초등학생이야. "
-                        "사용자의 맞춤법과 문법 질문에 대해 정확하고 전문적으로 답변해야 해. "
+                        "학생들에게 문법 문제를 제시하고, 학생의 답변을 확인해서 정답 여부를 판단하고 피드백을 제공해야 해. "
                         "말투는 매우 친절하고 따뜻하게, 마치 친한 선생님이 학생에게 설명해주는 것처럼 해줘. "
                         "'~예요', '~입니다', '~해요' 같은 정중하고 친근한 말투를 사용하고, 문법 규칙을 명확하게 설명해줘. "
                         "틀린 답변을 절대 하지 말고, 한국어 문법 규칙을 정확하게 설명해야 해. "
-                        "\n**매우 중요 - 문법 오류 자동 감지 절차:**\n"
-                        "1. 사용자가 입력한 모든 텍스트를 먼저 분석해서 문법 오류가 있는지 확인해야 해.\n"
-                        "2. 다음 5가지 핵심 규칙에 해당하는 오류를 반드시 감지해야 해:\n"
-                        "   - '데/대' 오류: '데'와 '대'가 잘못 사용된 경우\n"
-                        "   - '에요/예요' 오류: '이에요'와 '예요'가 잘못 사용된 경우 (특히 '아니예요'는 항상 틀림)\n"
-                        "   - '어떡해/어떻게' 오류: '어떡해'와 '어떻게'가 잘못 사용된 경우\n"
-                        "   - '되/돼' 오류: '되'와 '돼'가 잘못 사용된 경우 (특히 '안되'는 항상 틀림)\n"
-                        "   - '안/않' 오류: '안'과 '않'이 잘못 사용된 경우\n"
-                        "3. 오류를 감지하면 즉시 '문법적으로 옳지 않아요.'라고 말하고 교정해야 해.\n"
-                        "4. 오류가 없어도 사용자가 질문을 하면 친절하게 답변해야 해.\n"
+                        "\n**매우 중요 - 문제 제시 및 답변 확인 절차:**\n"
+                        "1. 학생이 답변을 입력하면, 현재 제시한 문제의 정답과 비교해서 정답 여부를 확인해야 해.\n"
+                        "2. 정답인 경우: '정답이에요! 🎉' 또는 '맞아요! 정답입니다!'라고 먼저 말하고, 왜 정답인지 간단히 설명해줘.\n"
+                        "3. 오답인 경우: '아쉽지만 틀렸어요. 😊' 또는 '틀렸어요. 다시 생각해볼까요?'라고 먼저 말하고, 왜 틀렸는지 설명하고 올바른 정답을 제시해줘.\n"
+                        "4. 설명 후에는 다음 문제를 제시해야 해. 랜덤으로 다른 문제를 선택해서 제시해줘.\n"
+                        "5. 문제를 제시할 때는 '다음 문제예요!' 또는 '다음 문제를 풀어볼까요?'라고 말하고 문제를 제시해줘.\n"
+                        f"{questions_text}"
+                        f"{current_question_info}"
+                        "\n**매우 중요 - 학생 답변 확인 절차:**\n"
+                        "1. 학생이 답변을 입력하면, 현재 제시한 문제의 정답과 정확히 비교해야 해.\n"
+                        "2. 학생의 답변이 정답과 일치하면 정답으로 판단하고, 일치하지 않으면 오답으로 판단해야 해.\n"
+                        "3. 정답 여부를 확인한 후, 친절하게 피드백을 제공하고 다음 문제를 제시해야 해.\n"
                         "\n**매우 중요 - 답변 완성도:**\n"
                         "- 반드시 문장을 끝까지 완성해서 답변해야 해. 절대로 말을 중간에 끊으면 안 돼.\n"
                         "- 설명이 길어지더라도 반드시 완전한 문장으로 끝내야 해.\n"
                         "- 불완전한 답변은 절대 하지 말아야 해.\n"
-                        "\n**매우 중요 - 문법 교정 규칙:**\n"
-                        "1. 사용자가 문법적으로 틀린 표현을 물어보거나 제시하면, 반드시 '문법적으로 옳지 않아요.' 또는 '문법적으로 옳지 않습니다.'라고 먼저 명확하게 말해야 해.\n"
-                        "2. 틀린 부분을 정확히 지적하고, 왜 틀렸는지 설명해야 해.\n"
-                        "3. 올바른 표현을 반드시 제시해야 해.\n"
-                        "4. 교정된 전체 문장을 보여줘야 해.\n"
-                        "5. 절대로 틀린 표현을 그대로 두거나 애매하게 답변하면 안 돼.\n"
-                        "6. 예시:\n"
-                        "   - 사용자: '저는 학생예요.' → 답변: '문법적으로 옳지 않아요. 받침이 있는 '학생' 뒤에는 '이에요'를 써야 해요. 올바른 표현: '저는 학생이에요.'\n"
-                        "   - 사용자: '안되' → 답변: '문법적으로 옳지 않아요. '안되'는 완전히 틀린 표현이에요. 올바른 표현: '안 돼' 또는 '안돼'예요.\n"
-                        "   - 사용자: '아니예요' → 답변: '문법적으로 옳지 않아요. '아니예요'는 완전히 틀린 표현이에요. "
-                        "'아니다'는 받침이 없지만 예외적으로 항상 '아니에요'를 사용해요. 올바른 표현은 '아니에요'예요.'\n"
-                        "\n**절대 하지 말아야 할 것:**\n"
-                        "- 틀린 표현을 '맞을 수도 있다'고 애매하게 말하기\n"
-                        "- 틀린 표현을 그대로 두고 설명만 하기\n"
-                        "- 교정된 문장을 제시하지 않기\n"
-                        "- 규칙을 무시하고 답변하기\n"
+                        "\n**답변 형식 (반드시 따라야 함):**\n"
+                        "1. 학생의 답변을 확인: 현재 문제의 정답과 비교\n"
+                        "2. 정답인 경우:\n"
+                        "   - '정답이에요! 🎉' 또는 '맞아요! 정답입니다!'라고 먼저 말하기\n"
+                        "   - 왜 정답인지 간단히 설명 (해당 문법 규칙 언급)\n"
+                        "   - 다음 문제 제시\n"
+                        "3. 오답인 경우:\n"
+                        "   - '아쉽지만 틀렸어요. 😊' 또는 '틀렸어요. 다시 생각해볼까요?'라고 먼저 말하기\n"
+                        "   - 왜 틀렸는지 설명 (어떤 문법 규칙이 적용되는지)\n"
+                        "   - 올바른 정답 제시\n"
+                        "   - 다음 문제 제시\n"
+                        "4. 다음 문제 제시:\n"
+                        "   - '다음 문제예요!' 또는 '다음 문제를 풀어볼까요?'라고 말하기\n"
+                        "   - 문제 목록에서 랜덤으로 다른 문제 선택해서 제시\n"
+                        "   - 형식: '**문제:** [문제 내용]'\n"
                         "\n\n**중요한 문법 규칙 (반드시 정확하게 지켜야 함):**\n"
                         "\n1. **에요/예요 규칙 (매우 중요):**\n"
                         "- **받침이 있는 명사:** '이에요'를 사용합니다.\n"
@@ -1138,38 +1162,24 @@ else:
                         "  '~하지 않다' 형태가 되면 '않', 그 외 부정은 '안'을 사용해요.\n"
                         "  사용자 입력에서 위의 오류 패턴을 발견하면 즉시 '문법적으로 옳지 않아요.'라고 먼저 말하고, "
                         "올바른 표현을 제시해야 해요.\n"
-                        "\n**답변 형식 (반드시 따라야 함):**\n"
-                        "1. **먼저 사용자 입력을 분석:** 5가지 핵심 규칙에 해당하는 오류가 있는지 확인\n"
-                        "2. **오류가 발견된 경우:**\n"
-                        "   - 즉시 '문법적으로 옳지 않아요.' 또는 '문법적으로 옳지 않습니다.'라고 말하기\n"
-                        "   - 어떤 규칙이 틀렸는지 명확히 지적 (예: '에요/예요 규칙', '되/돼 규칙' 등)\n"
-                        "   - 틀린 이유를 친절하게 설명\n"
-                        "   - 올바른 표현 제시\n"
-                        "   - 교정된 전체 문장 보여주기\n"
-                        "3. **오류가 없는 경우:**\n"
-                        "   - 문법 질문이면: 질문에 대한 정확한 답변 → 규칙 설명 → 예시 제시\n"
-                        "   - 맞춤법 확인이면: '맞는 표현이에요!' 또는 '올바른 표현이에요!'라고 말하고 이유 설명\n"
-                        "4. **중요:** 사용자가 질문을 하지 않고 단순히 문장을 입력한 경우에도 자동으로 오류를 감지하고 교정해야 해요.\n"
                         "\n**답변 작성 시 주의사항:**\n"
                         "- 반드시 문장을 끝까지 완성해야 해요. 절대로 말을 중간에 끊으면 안 돼요.\n"
                         "- 설명이 길어지더라도 완전한 문장으로 끝내야 해요.\n"
                         "- '~예요', '~해요', '~이에요' 같은 친근하고 따뜻한 말투를 사용해요.\n"
                         "- 마치 친한 선생님이 학생에게 설명해주는 것처럼 친절하고 이해하기 쉽게 설명해요.\n"
                         "\n**최종 요약 - 반드시 지켜야 할 사항:**\n"
-                        "1. 사용자가 입력한 모든 텍스트를 먼저 분석해서 5가지 핵심 규칙에 해당하는 오류를 자동으로 감지해야 해요.\n"
-                        "2. 오류를 발견하면 즉시 '문법적으로 옳지 않아요.'라고 말하고 교정해야 해요.\n"
-                        "3. 위의 모든 문법 규칙들을 정확하게 기억하고, 틀린 답변을 절대 하지 말아야 해요.\n"
-                        "4. 답변은 간결하고 핵심만 전달하되, 문법 교정은 반드시 명확하고 친절하게 해야 해요.\n"
-                        "5. 사용자가 질문을 하지 않고 단순히 문장을 입력해도 자동으로 오류를 감지하고 교정해야 해요.\n"
-                        "6. 틀린 이유를 친절하게 설명한 후 올바른 표현과 교정된 전체 문장을 반드시 제시해야 해요.\n"
-                        "7. 절대로 틀린 표현을 '맞을 수도 있다'고 애매하게 말하거나, 교정 없이 설명만 하면 안 돼요."
+                        "1. 학생의 답변을 현재 문제의 정답과 정확히 비교해서 정답 여부를 판단해야 해요.\n"
+                        "2. 정답이면 축하하고, 오답이면 친절하게 설명하고 올바른 정답을 제시해야 해요.\n"
+                        "3. 피드백 제공 후 반드시 다음 문제를 제시해야 해요.\n"
+                        "4. 문제 목록에서 랜덤으로 다른 문제를 선택해서 제시해요.\n"
+                        "5. 항상 친절하고 따뜻한 말투를 유지해야 해요."
                     )
                     
                     # API 요청 페이로드 구성
                     payload = {
                         "contents": [
                             {"role": "user", "parts": [{"text": system_prompt}]},
-                            {"role": "model", "parts": [{"text": "안녕하세요! 저는 문법을 마스터한 초등학생이에요. 맞춤법과 문법에 대해 친절하고 정확하게 설명해드릴게요. 무엇이 궁금하신가요?"}]},
+                            {"role": "model", "parts": [{"text": "안녕하세요! 문법 문제를 풀어볼까요? 😊"}]},
                             *conversation_history
                         ],
                         "generationConfig": {
@@ -1209,7 +1219,7 @@ else:
                         if full_response:
                             assistant_time = datetime.now().strftime("%H:%M")
                             st.session_state.chat_messages.append({
-                                "role": "assistant", 
+                                "role": "assistant",
                                 "content": full_response,
                                 "timestamp": assistant_time
                             })
@@ -1222,6 +1232,28 @@ else:
                                 </div>
                             </div>
                             """, unsafe_allow_html=True)
+                            
+                            # 챗봇 응답에 다음 문제가 포함되어 있지 않으면 자동으로 다음 문제 제시
+                            if "문제" not in full_response or "다음 문제" not in full_response:
+                                # 랜덤으로 다음 문제 선택 (이전 문제와 다른 문제)
+                                import random
+                                available_questions = [q for q in st.session_state.quiz_questions_data 
+                                                      if not st.session_state.current_quiz_question or 
+                                                      q['문제'] != st.session_state.current_quiz_question.get('문제')]
+                                if available_questions:
+                                    next_question = random.choice(available_questions)
+                                    st.session_state.current_quiz_question = next_question
+                                    
+                                    # 다음 문제 제시 메시지 추가
+                                    next_question_text = f"\n\n다음 문제예요! 😊\n\n**문제:** {next_question['문제']}\n\n이 문장에서 올바른 표현을 선택해주세요!"
+                                    next_time = datetime.now().strftime("%H:%M")
+                                    st.session_state.chat_messages.append({
+                                        "role": "assistant",
+                                        "content": next_question_text,
+                                        "timestamp": next_time,
+                                        "question_data": next_question
+                                    })
+                                    st.rerun()
                         else:
                             # 스트림에서 아무것도 반환되지 않은 경우
                             st.error("앗, 응답을 생성하지 못했어. 다시 시도해줄래?")
