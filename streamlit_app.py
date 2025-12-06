@@ -984,350 +984,150 @@ else:
             current_question_data = msg["question_data"]
             break
     
-    # 문제가 있고 아직 답변이 없으면 선택지 버튼 표시
+    # 문제가 있고 아직 답변이 없거나 "다시 시도해보세요" 피드백이면 선택지 버튼 표시
     if current_question_data and st.session_state.chat_messages:
         last_message = st.session_state.chat_messages[-1]
-        # 마지막 메시지가 챗봇의 문제 제시이고, 아직 사용자 답변이 없으면
-        if last_message["role"] == "assistant" and "문제:" in last_message["content"]:
-            # 선택지 생성 (정답 + 오답 2개)
+        # 마지막 메시지가 챗봇의 문제 제시이거나 "다시 시도해보세요" 피드백이면 버튼 표시
+        if (last_message["role"] == "assistant" and "문제:" in last_message["content"]) or \
+           (last_message["role"] == "assistant" and "다시 시도해보세요" in last_message["content"]):
+            # 선택지 생성 (정답 1개 + 오답 2개)
             import random
-            options = [current_question_data['정답']] + current_question_data.get('오답들', [])
-            # 오답이 1개만 있으면 정답을 복제해서 3개 만들기
-            if len(options) < 3:
-                while len(options) < 3:
-                    options.append(current_question_data['정답'])
-            # 3개만 선택하고 섞기
-            if len(options) > 3:
-                options = random.sample(options, 3)
-            else:
-                random.shuffle(options)
+            correct_answer = current_question_data['정답']
+            wrong_answers = current_question_data.get('오답들', [])
+            
+            # 오답이 부족하면 다른 문제의 오답을 가져오거나 정답을 변형
+            while len(wrong_answers) < 2:
+                # 다른 문제에서 오답 가져오기
+                other_questions = [q for q in st.session_state.quiz_questions_data 
+                                 if q['문제'] != current_question_data['문제']]
+                if other_questions:
+                    other_q = random.choice(other_questions)
+                    other_wrong = other_q.get('오답들', [])
+                    if other_wrong:
+                        wrong_answers.append(random.choice(other_wrong))
+                    else:
+                        # 정답을 약간 변형해서 오답 만들기
+                        wrong_answers.append(correct_answer.replace('예요', '에요').replace('에요', '예요').replace('되', '돼').replace('돼', '되'))
+                else:
+                    # 정답을 약간 변형해서 오답 만들기
+                    wrong_answers.append(correct_answer.replace('예요', '에요').replace('에요', '예요').replace('되', '돼').replace('돼', '되'))
+            
+            # 정답 1개 + 오답 2개로 구성
+            options = [correct_answer] + wrong_answers[:2]
+            random.shuffle(options)
+            
+            # 정답 인덱스 저장
+            correct_index = options.index(correct_answer)
             
             # 버튼으로 선택지 표시
             st.markdown("**답을 선택해주세요:**")
             col1, col2, col3 = st.columns(3)
             
+            # 각 버튼에 대한 정답 여부 확인 및 처리
+            button_keys = [
+                f"answer_btn_0_{hash(current_question_data['문제'])}",
+                f"answer_btn_1_{hash(current_question_data['문제'])}",
+                f"answer_btn_2_{hash(current_question_data['문제'])}"
+            ]
+            
             with col1:
-                if st.button(options[0], key=f"answer_btn_0_{hash(current_question_data['문제'])}", use_container_width=True):
+                if st.button(options[0], key=button_keys[0], use_container_width=True):
                     selected_answer = options[0]
-                    # 답변 처리
-                    current_time = datetime.now().strftime("%H:%M")
-                    user_message = {"role": "user", "content": selected_answer, "timestamp": current_time}
-                    st.session_state.chat_messages.append(user_message)
-                    st.rerun()
+                    is_correct = (0 == correct_index)
+                    
+                    if is_correct:
+                        # 정답 처리
+                        current_time = datetime.now().strftime("%H:%M")
+                        feedback_message = {"role": "assistant", "content": "정답입니다! 🎉", "timestamp": current_time}
+                        st.session_state.chat_messages.append(feedback_message)
+                        
+                        # 다음 문제 제시
+                        available_questions = [q for q in st.session_state.quiz_questions_data 
+                                             if q['문제'] != current_question_data['문제']]
+                        if available_questions:
+                            next_question = random.choice(available_questions)
+                            st.session_state.current_quiz_question = next_question
+                            next_question_text = f"다음 문제예요! 😊\n\n**문제:** {next_question['문제']}\n\n아래 버튼 중에서 올바른 표현을 선택해주세요!"
+                            next_time = datetime.now().strftime("%H:%M")
+                            st.session_state.chat_messages.append({
+                                "role": "assistant",
+                                "content": next_question_text,
+                                "timestamp": next_time,
+                                "question_data": next_question
+                            })
+                        st.rerun()
+                    else:
+                        # 오답 처리
+                        current_time = datetime.now().strftime("%H:%M")
+                        feedback_message = {"role": "assistant", "content": "다시 시도해보세요 😊", "timestamp": current_time}
+                        st.session_state.chat_messages.append(feedback_message)
+                        st.rerun()
             
             with col2:
-                if st.button(options[1], key=f"answer_btn_1_{hash(current_question_data['문제'])}", use_container_width=True):
+                if st.button(options[1], key=button_keys[1], use_container_width=True):
                     selected_answer = options[1]
-                    # 답변 처리
-                    current_time = datetime.now().strftime("%H:%M")
-                    user_message = {"role": "user", "content": selected_answer, "timestamp": current_time}
-                    st.session_state.chat_messages.append(user_message)
-                    st.rerun()
+                    is_correct = (1 == correct_index)
+                    
+                    if is_correct:
+                        # 정답 처리
+                        current_time = datetime.now().strftime("%H:%M")
+                        feedback_message = {"role": "assistant", "content": "정답입니다! 🎉", "timestamp": current_time}
+                        st.session_state.chat_messages.append(feedback_message)
+                        
+                        # 다음 문제 제시
+                        available_questions = [q for q in st.session_state.quiz_questions_data 
+                                             if q['문제'] != current_question_data['문제']]
+                        if available_questions:
+                            next_question = random.choice(available_questions)
+                            st.session_state.current_quiz_question = next_question
+                            next_question_text = f"다음 문제예요! 😊\n\n**문제:** {next_question['문제']}\n\n아래 버튼 중에서 올바른 표현을 선택해주세요!"
+                            next_time = datetime.now().strftime("%H:%M")
+                            st.session_state.chat_messages.append({
+                                "role": "assistant",
+                                "content": next_question_text,
+                                "timestamp": next_time,
+                                "question_data": next_question
+                            })
+                        st.rerun()
+                    else:
+                        # 오답 처리
+                        current_time = datetime.now().strftime("%H:%M")
+                        feedback_message = {"role": "assistant", "content": "다시 시도해보세요 😊", "timestamp": current_time}
+                        st.session_state.chat_messages.append(feedback_message)
+                        st.rerun()
             
             with col3:
-                if st.button(options[2], key=f"answer_btn_2_{hash(current_question_data['문제'])}", use_container_width=True):
+                if st.button(options[2], key=button_keys[2], use_container_width=True):
                     selected_answer = options[2]
-                    # 답변 처리
-                    current_time = datetime.now().strftime("%H:%M")
-                    user_message = {"role": "user", "content": selected_answer, "timestamp": current_time}
-                    st.session_state.chat_messages.append(user_message)
-                    st.rerun()
+                    is_correct = (2 == correct_index)
+                    
+                    if is_correct:
+                        # 정답 처리
+                        current_time = datetime.now().strftime("%H:%M")
+                        feedback_message = {"role": "assistant", "content": "정답입니다! 🎉", "timestamp": current_time}
+                        st.session_state.chat_messages.append(feedback_message)
+                        
+                        # 다음 문제 제시
+                        available_questions = [q for q in st.session_state.quiz_questions_data 
+                                             if q['문제'] != current_question_data['문제']]
+                        if available_questions:
+                            next_question = random.choice(available_questions)
+                            st.session_state.current_quiz_question = next_question
+                            next_question_text = f"다음 문제예요! 😊\n\n**문제:** {next_question['문제']}\n\n아래 버튼 중에서 올바른 표현을 선택해주세요!"
+                            next_time = datetime.now().strftime("%H:%M")
+                            st.session_state.chat_messages.append({
+                                "role": "assistant",
+                                "content": next_question_text,
+                                "timestamp": next_time,
+                                "question_data": next_question
+                            })
+                        st.rerun()
+                    else:
+                        # 오답 처리
+                        current_time = datetime.now().strftime("%H:%M")
+                        feedback_message = {"role": "assistant", "content": "다시 시도해보세요 😊", "timestamp": current_time}
+                        st.session_state.chat_messages.append(feedback_message)
+                        st.rerun()
     
-    # 사용자 답변이 있고 챗봇 피드백이 없으면 Gemini 응답 생성
-    if st.session_state.chat_messages and st.session_state.chat_messages[-1]["role"] == "user":
-        # 마지막 사용자 메시지에 대한 챗봇 응답이 있는지 확인
-        has_response = len(st.session_state.chat_messages) > 1 and st.session_state.chat_messages[-2]["role"] == "assistant"
-        
-        # 챗봇 응답이 없으면 생성
-        if not has_response:
-            user_answer = st.session_state.chat_messages[-1]["content"]
-            prompt = user_answer
-            
-            # 사용자 메시지 이미 표시됨 (버튼 클릭 시 추가됨)
-            # Gemini 응답 생성
-            with chat_container:
-                # 챗봇 응답 영역 생성
-                response_placeholder = st.empty()
-                
-                with response_placeholder.container():
-                    with st.spinner("💭 생각 중..."):
-                        # 페르소나 설정 및 대화 기록을 API 요청 형식으로 변환
-                        conversation_history = []
-                        for msg in st.session_state.chat_messages:
-                            role = "model" if msg["role"] == "assistant" else "user"
-                            conversation_history.append({"role": role, "parts": [{"text": msg["content"]}]})
-    
-                        # 현재 문제 데이터 가져오기
-                        current_question_data = None
-                        for msg in reversed(st.session_state.chat_messages):
-                            if msg.get("question_data"):
-                                current_question_data = msg["question_data"]
-                                break
-                        
-                        # 문제 데이터를 챗봇에게 제공 (입력된 문제 내에서만 문제를 내도록)
-                        questions_text = "다음은 사용 가능한 문법 문제와 정답 목록이야. 반드시 이 목록에 있는 문제만 제시해야 해:\n\n"
-                        for q in st.session_state.quiz_questions_data:
-                            questions_text += f"- 문제: {q['문제']} → 정답: {q['정답']} (오류 유형: {q['오류 유형']})\n"
-                        questions_text += "\n**중요:** 위 목록에 있는 문제만 제시해야 해. 목록에 없는 문제는 절대 제시하면 안 돼.\n"
-                        
-                        # 현재 문제 정보
-                        current_question_info = ""
-                        if current_question_data:
-                            current_question_info = f"\n**현재 제시한 문제:**\n문제: {current_question_data['문제']}\n정답: {current_question_data['정답']}\n오류 유형: {current_question_data['오류 유형']}\n\n"
-                        
-                        # 마지막 사용자 메시지 앞에 페르소나 프롬프트 추가
-                        system_prompt = (
-                            "너는 문법을 완벽하게 마스터한 초등학생이야. "
-                            "학생들에게 문법 문제를 제시하고, 학생의 답변을 확인해서 정답 여부를 판단하고 피드백을 제공해야 해. "
-                            "말투는 매우 친절하고 따뜻하게, 마치 친한 선생님이 학생에게 설명해주는 것처럼 해줘. "
-                            "'~예요', '~입니다', '~해요' 같은 정중하고 친근한 말투를 사용하고, 문법 규칙을 명확하게 설명해줘. "
-                            "틀린 답변을 절대 하지 말고, 한국어 문법 규칙을 정확하게 설명해야 해. "
-                            "\n**매우 중요 - 문제 제시 및 답변 확인 절차:**\n"
-                            "1. 학생이 답변을 입력하면, 현재 제시한 문제의 정답과 비교해서 정답 여부를 확인해야 해.\n"
-                            "2. 정답인 경우: '정답입니다! 🎉' 또는 '정답입니다!'라고 밝고 명확하게 먼저 말하고, 왜 정답인지 간단히 설명해줘.\n"
-                            "3. 오답인 경우: '아쉽지만 틀렸어요. 😊' 또는 '틀렸어요. 다시 생각해볼까요?'라고 먼저 말하고, 왜 틀렸는지 설명하고 올바른 정답을 제시해줘.\n"
-                            "4. 설명 후에는 반드시 다음 문제를 제시해야 해. 위에 제공된 문제 목록에서 랜덤으로 다른 문제를 선택해서 제시해줘.\n"
-                            "5. 문제를 제시할 때는 '다음 문제예요! 😊' 또는 '다음 문제를 풀어볼까요?'라고 말하고 문제를 제시해줘.\n"
-                            "6. **매우 중요:** 반드시 위에 제공된 문제 목록에 있는 문제만 제시해야 해. 목록에 없는 문제는 절대 제시하면 안 돼.\n"
-                            f"{questions_text}"
-                            f"{current_question_info}"
-                            "\n**매우 중요 - 학생 답변 확인 절차:**\n"
-                            "1. 학생이 답변을 입력하면, 현재 제시한 문제의 정답과 정확히 비교해야 해.\n"
-                            "2. **특수 케이스 - 질문 유형에 따른 키워드 기반 정답 판단:**\n"
-                            "   - 학생이 '되/돼를 구분하는 방법은 무엇인가요?' 또는 '되/돼 구분 방법' 같은 질문을 했을 때:\n"
-                            "     → 학생의 답변에 '하' 또는 '해' 키워드가 포함되어 있으면 정답으로 처리해야 해.\n"
-                            "     → 예: '하를 넣어보세요', '해로 바꿔보세요', '하나 해를 넣어' 등이 포함되면 정답\n"
-                            "   - 학생이 '이에요, 예요를 구분하는 방법은 무엇인가요?' 또는 '이에요 예요 구분 방법' 같은 질문을 했을 때:\n"
-                            "     → 학생의 답변에 '받침' 키워드가 포함되어 있으면 정답으로 처리해야 해.\n"
-                            "     → 예: '받침이 있으면', '받침이 없으면', '받침 여부' 등이 포함되면 정답\n"
-                            "3. 일반 문제의 경우: 학생의 답변이 정답과 일치하면 정답으로 판단하고, 일치하지 않으면 오답으로 판단해야 해.\n"
-                            "4. 정답 여부를 확인한 후, 친절하게 피드백을 제공하고 반드시 다음 문제를 제시해야 해.\n"
-                            "\n**매우 중요 - 답변 완성도:**\n"
-                            "- 반드시 문장을 끝까지 완성해서 답변해야 해. 절대로 말을 중간에 끊으면 안 돼.\n"
-                            "- 설명이 길어지더라도 반드시 완전한 문장으로 끝내야 해.\n"
-                            "- 불완전한 답변은 절대 하지 말아야 해.\n"
-                            "\n**답변 형식 (반드시 따라야 함):**\n"
-                            "1. 학생의 답변을 확인: 현재 문제의 정답과 비교\n"
-                            "2. **특수 질문 유형 처리:**\n"
-                            "   - 만약 제시한 문제가 '되/돼를 구분하는 방법은 무엇인가요?' 같은 질문이면:\n"
-                            "     → 학생 답변에 '하' 또는 '해' 키워드가 포함되어 있으면 정답으로 처리\n"
-                            "     → 예: '하를 넣어보세요', '해로 바꿔보세요' 등이 포함되면 정답\n"
-                            "   - 만약 제시한 문제가 '이에요, 예요를 구분하는 방법은 무엇인가요?' 같은 질문이면:\n"
-                            "     → 학생 답변에 '받침' 키워드가 포함되어 있으면 정답으로 처리\n"
-                            "     → 예: '받침이 있으면', '받침이 없으면' 등이 포함되면 정답\n"
-                            "3. 정답인 경우:\n"
-                            "   - '정답입니다! 🎉' 또는 '정답입니다!'라고 밝고 명확하게 먼저 말하기\n"
-                            "   - 왜 정답인지 간단히 설명 (해당 문법 규칙 언급)\n"
-                            "   - 다음 문제 제시\n"
-                            "4. 오답인 경우:\n"
-                            "   - '아쉽지만 틀렸어요. 😊' 또는 '틀렸어요. 다시 생각해볼까요?'라고 먼저 말하기\n"
-                            "   - 왜 틀렸는지 설명 (어떤 문법 규칙이 적용되는지)\n"
-                            "   - 올바른 정답 제시\n"
-                            "   - 다음 문제 제시\n"
-                            "5. 다음 문제 제시:\n"
-                            "   - '다음 문제예요! 😊' 또는 '다음 문제를 풀어볼까요?'라고 말하기\n"
-                            "   - 문제 목록에서 랜덤으로 다른 문제 선택해서 제시\n"
-                            "   - 형식: '**문제:** [문제 내용]'\n"
-                            "\n\n**중요한 문법 규칙 (반드시 정확하게 지켜야 함):**\n"
-                            "\n1. **에요/예요 규칙 (매우 중요):**\n"
-                            "- **받침이 있는 명사:** '이에요'를 사용합니다.\n"
-                            "  예: '책이에요', '집이에요', '사람이에요', '학생이에요'\n"
-                            "  특수 케이스: '컴퓨터예요' - '컴퓨터'는 '터' 받침이 있지만 '이' 탈락으로 '컴퓨터예요'가 맞아요.\n"
-                            "- **받침이 없는 명사:** '예요'를 사용합니다 (← '이예요'가 줄어든 형태).\n"
-                            "  예: '과자예요', '바나나예요', '여자예요', '저예요' (저+예요), '사과예요'\n"
-                            "- **오류 감지 패턴:** 사용자 입력에서 다음을 찾아야 해:\n"
-                            "  - 받침이 있는 명사 뒤에 '예요'가 오는 경우 (예: '학생예요', '책예요', '집예요')\n"
-                            "  - 받침이 없는 명사 뒤에 '이에요'가 오는 경우 (예: '과자이에요', '바나나이에요')\n"
-                            "  - '아니예요'가 사용된 경우 (이것은 항상 틀림 - 절대 예외 없음)\n"
-                            "- **틀린 표현 예시:**\n"
-                            "  ✗ '저는 학생예요' (받침이 있는데 '예요' 사용 - 틀림)\n"
-                            "  ✓ '저는 학생이에요' (받침이 있으므로 '이에요' 사용 - 맞음)\n"
-                            "  ✗ '이건 제 책이에요' (받침이 없는데 '이에요' 사용 - 틀림)\n"
-                            "  ✓ '이건 제 책예요' (받침이 없으므로 '예요' 사용 - 맞음)\n"
-                            "- **교정 방법:** 받침이 있으면 '이에요', 받침이 없으면 '예요'를 사용해요.\n"
-                            "  사용자 입력에서 위의 오류 패턴을 발견하면 즉시 '문법적으로 옳지 않아요.'라고 먼저 말하고, "
-                            "받침 여부를 확인해서 올바른 표현을 제시해야 해요.\n"
-                            "- **매우 중요한 예외 - 절대 틀리면 안 되는 규칙:**\n"
-                            "  '아니예요'는 절대 틀린 표현이에요. 어떤 상황에서도 사용하면 안 돼요.\n"
-                            "  '아니예요'는 '예외적인 상황에서만 사용'되는 것이 절대 아니에요. 완전히 틀린 표현이에요.\n"
-                            "  '아니다'는 받침이 없지만 예외적으로 항상 '아니에요'를 사용해요.\n"
-                            "  올바른 표현: '아니에요' ✓ / 틀린 표현: '아니예요' ✗ (절대 사용 금지)\n"
-                            "  사용자가 '아니예요'를 물어보면 반드시 '문법적으로 옳지 않아요. '아니예요'는 완전히 틀린 표현이에요. "
-                            "올바른 표현은 '아니에요'예요.'라고 친절하게 설명해야 해요.\n"
-                            "\n2. **데/대 규칙 (매우 중요):**\n"
-                            "- **'데' 사용:** 직접 경험한 사실을 말할 때 사용해요.\n"
-                            "  예: '어제 영화를 봤는데 정말 재미있었어요.' (직접 경험)\n"
-                            "- **'대' 사용:** 다른 사람에게 들은 내용을 전달할 때 사용해요.\n"
-                            "  예: '친구가 오늘 시험이래' (들은 내용), '어제 가보니 정말 좋대' (간접 경험)\n"
-                            "- **오류 감지 패턴:** 사용자 입력에서 다음을 찾아야 해:\n"
-                            "  - 들은 내용을 전달하는데 '데'를 사용한 경우 (예: '~했데', '~됐데', '~이데')\n"
-                            "  - 직접 경험을 말하는데 '대'를 사용한 경우 (예: '~했대', '~됐대')\n"
-                            "- **틀린 표현 예시:**\n"
-                            "  ✗ '졸업식이 일주일 연기됐데' (들은 내용인데 '데' 사용 - 틀림)\n"
-                            "  ✓ '졸업식이 일주일 연기됐대' (들은 내용이므로 '대' 사용 - 맞음)\n"
-                            "- **교정 방법:** 들은 내용이면 '대', 직접 경험이면 '데'를 사용해요.\n"
-                            "  사용자 입력에서 위의 오류 패턴을 발견하면 즉시 '문법적으로 옳지 않아요.'라고 먼저 말하고, "
-                            "들은 내용인지 직접 경험인지 구분해서 올바른 표현을 제시해야 해요.\n"
-                            "\n3. **어떡해/어떻게 규칙 (매우 중요):**\n"
-                            "- **'어떻게' 사용:** '어떠하게'의 준말로 방법을 물을 때 써요.\n"
-                            "  예: '이 문제를 어떻게 풀지?' (방법), '너 집에 어떻게 가?' (방법)\n"
-                            "- **'어떡해' 사용:** '어떻게 해'의 준말로 걱정되는 상황에서 사용해요.\n"
-                            "  예: '지갑을 잃어버렸어. 어떡해!' (걱정), '시험이 내일인데 어떡해!' (걱정)\n"
-                            "- **오류 감지 패턴:** 사용자 입력에서 다음을 찾아야 해:\n"
-                            "  - 방법을 묻는 질문인데 '어떡해'를 사용한 경우 (예: '어떡해 해야 해?', '어떡해 가?', '어떡해 풀지?')\n"
-                            "  - 걱정이나 당황스러운 상황인데 '어떻게'를 사용한 경우 (예: '지갑을 잃어버렸어. 어떻게!', '시험이 내일인데 어떻게!')\n"
-                            "- **틀린 표현 예시:**\n"
-                            "  ✗ '어떡해 나한테 그럴 수 있어?' (방법을 묻는 것인데 '어떡해' 사용 - 틀림)\n"
-                            "  ✓ '어떻게 나한테 그럴 수 있어?' (방법을 묻는 것이므로 '어떻게' 사용 - 맞음)\n"
-                            "  ✗ '지갑을 잃어버렸어. 어떻게!' (걱정인데 '어떻게' 사용 - 틀림)\n"
-                            "  ✓ '지갑을 잃어버렸어. 어떡해!' (걱정이므로 '어떡해' 사용 - 맞음)\n"
-                            "- **교정 방법:** 방법을 묻는 질문이면 '어떻게', 걱정이나 당황스러운 상황이면 '어떡해'를 사용해요.\n"
-                            "  사용자 입력에서 위의 오류 패턴을 발견하면 즉시 '문법적으로 옳지 않아요.'라고 먼저 말하고, "
-                            "방법을 묻는 것인지 걱정인지 구분해서 올바른 표현을 제시해야 해요.\n"
-                            "\n4. **되/돼 규칙 (매우 중요):**\n"
-                            "- **기본 원칙:** 문장 끝에 오는 것은 무조건 '돼'가 맞아요.\n"
-                            "  예: '그러면 안 돼', '이제 가도 돼', '그렇게 하면 안돼'\n"
-                            "- **판단 방법:** 돼, 되 자리에 '하'를 넣었을 때 말이 되면 '되', 안되면 '돼'를 써요.\n"
-                            "  - '하'를 넣었을 때 말이 되면 → '되' 사용\n"
-                            "  - '하'를 넣었을 때 말이 안되면 → '돼' 사용\n"
-                            "- '되어'의 준말이 '돼'예요.\n"
-                            "- '되어'를 넣어 말이 되면 '돼'를 쓸 수 있어요.\n"
-                            "- **사용법:** '되' 또는 '돼' 앞에 '하' 또는 '해'를 넣어보세요.\n"
-                            "- '돼': '해'로 바꾸었을 때 말이 되면 '돼'를 씁니다.\n"
-                            "  예: '쓰레기를 이곳에 버리면 안 돼' → '쓰레기를 이곳에 버리면 안 해' (자연스러움) ✓\n"
-                            "- '되': '하'로 바꾸었을 때 말이 되면 '되'를 씁니다.\n"
-                            "  예: '선생님이 되고 싶어' → '선생님이 하고 싶어' (자연스러움) ✓\n"
-                            "- '되'는 동사로 쓰일 때 사용해요: '의사가 되고 싶어요'\n"
-                            "- **오류 감지 패턴:** 사용자 입력에서 다음을 찾아야 해:\n"
-                            "  - '안되'가 사용된 경우 (이것은 항상 틀림 - 절대 예외 없음)\n"
-                            "  - 문장 끝에 '되'가 오는 경우 (문장 끝에는 항상 '돼'가 맞음)\n"
-                            "  - '하'를 넣었을 때 말이 안되는데 '되'를 사용한 경우\n"
-                            "  - '해'를 넣었을 때 말이 되는데 '되'를 사용한 경우\n"
-                            "- **매우 중요 - '안되' vs '안돼' 규칙:**\n"
-                            "  '안되'는 틀린 말이고 '안돼'가 맞는 말이에요.\n"
-                            "  '안되'는 문법적으로 완전히 틀린 표현이에요. 절대 사용하면 안 됩니다.\n"
-                            "  올바른 표현: '안 돼' 또는 '안돼' (띄어쓰기 여부는 맥락에 따라 다름)\n"
-                            "  틀린 표현: '안되' (이것은 절대 사용하면 안 되는 틀린 표현입니다)\n"
-                            "  예: '안돼, 걷지 마세요' ✓ / '안되, 걷지 마세요' ✗ (완전히 틀림)\n"
-                            "  사용자 입력에서 '안되'를 발견하면 즉시 '문법적으로 옳지 않아요. '안되'는 틀린 말이고 '안돼'가 맞는 말이에요.'라고 명확하게 설명해야 해요.\n"
-                            "\n5. **안/않 규칙 (매우 중요):**\n"
-                            "- **'안' 사용:** '아니'의 준말이에요. 부정을 나타낼 때 사용해요.\n"
-                            "  예: '숙제를 아직 안 했다' (안 했다), '그렇게 하면 안돼' (안 돼)\n"
-                            "- **'않' 사용:** '아니하다'의 준말인 '않다' 동사 형태로 쓸 때 사용해요.\n"
-                            "  예: '미안하지도 않니?' (아니하니 → 않니), '그렇게 하면 안되' (틀림) → '그렇게 하면 안돼' (맞음)\n"
-                            "- **오류 감지 패턴:** 사용자 입력에서 다음을 찾아야 해:\n"
-                            "  - '~하지 않다' 형태인데 '안'을 사용한 경우 (예: '~하지 안니?', '~하지 안아')\n"
-                            "  - 일반 부정인데 '않'을 사용한 경우 (예: '않 했다', '않 가', '않 해')\n"
-                            "- **틀린 표현 예시:**\n"
-                            "  ✗ '너는 나한테 미안하지도 안니?' ('안니'는 틀림 - '않니'가 맞음)\n"
-                            "  ✓ '너는 나한테 미안하지도 않니?' ('아니하니'의 준말이 '않니' - 맞음)\n"
-                            "  ✗ '숙제를 아직 않 했다' ('않 했다'는 틀림 - '안 했다'가 맞음)\n"
-                            "  ✓ '숙제를 아직 안 했다' ('아니 했다'의 준말이 '안 했다' - 맞음)\n"
-                            "- **교정 방법:** '아니'의 준말이면 '안', '아니하다'의 준말이면 '않'을 사용해요.\n"
-                            "  '~하지 않다' 형태가 되면 '않', 그 외 부정은 '안'을 사용해요.\n"
-                            "  사용자 입력에서 위의 오류 패턴을 발견하면 즉시 '문법적으로 옳지 않아요.'라고 먼저 말하고, "
-                            "올바른 표현을 제시해야 해요.\n"
-                            "\n**답변 작성 시 주의사항:**\n"
-                            "- 반드시 문장을 끝까지 완성해야 해요. 절대로 말을 중간에 끊으면 안 돼요.\n"
-                            "- 설명이 길어지더라도 완전한 문장으로 끝내야 해요.\n"
-                            "- '~예요', '~해요', '~이에요' 같은 친근하고 따뜻한 말투를 사용해요.\n"
-                            "- 마치 친한 선생님이 학생에게 설명해주는 것처럼 친절하고 이해하기 쉽게 설명해요.\n"
-                            "\n**최종 요약 - 반드시 지켜야 할 사항:**\n"
-                            "1. 학생의 답변을 현재 문제의 정답과 정확히 비교해서 정답 여부를 판단해야 해요.\n"
-                            "2. 정답이면 '정답입니다!'라고 밝고 명확하게 말하고 축하해야 해요.\n"
-                            "3. 오답이면 친절하게 설명하고 올바른 정답을 제시해야 해요.\n"
-                            "4. 피드백 제공 후 반드시 다음 문제를 제시해야 해요.\n"
-                            "5. 문제 목록에서 랜덤으로 다른 문제를 선택해서 제시해요.\n"
-                            "6. 항상 친절하고 따뜻한 말투를 유지해야 해요."
-                        )
-                        
-                        # API 요청 페이로드 구성
-                        payload = {
-                            "contents": [
-                                {"role": "user", "parts": [{"text": system_prompt}]},
-                                {"role": "model", "parts": [{"text": "안녕하세요! 문법 문제를 풀어볼까요? 😊"}]},
-                                *conversation_history
-                            ],
-                            "generationConfig": {
-                                "temperature": 0.3,
-                                "topP": 0.8,
-                                "topK": 20,
-                                "maxOutputTokens": 500,
-                            },
-                            "safetySettings": [
-                                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
-                                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
-                                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
-                                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
-                            ],
-                        }
-        
-                        try:
-                            # 스트리밍 응답을 수집
-                            response_stream = stream_gemini_response(payload)
-                            full_response = ""
-                            
-                            # 스트리밍 응답을 실시간으로 표시
-                            streaming_placeholder = st.empty()
-                            for chunk in response_stream:
-                                full_response += chunk
-                                # 실시간으로 업데이트되는 메시지 표시
-                                streaming_placeholder.markdown(f"""
-                                <div class="assistant-message">
-                                    <div class="assistant-bubble">
-                                        {full_response}
-                                        <div class="message-time assistant-time">{current_time}</div>
-                                    </div>
-                                </div>
-                                """, unsafe_allow_html=True)
-                            
-                            # 최종 응답을 대화 기록에 추가
-                            if full_response:
-                                assistant_time = datetime.now().strftime("%H:%M")
-                                st.session_state.chat_messages.append({
-                                    "role": "assistant",
-                                    "content": full_response,
-                                    "timestamp": assistant_time
-                                })
-                                # 최종 메시지로 업데이트
-                                streaming_placeholder.markdown(f"""
-                                <div class="assistant-message">
-                                    <div class="assistant-bubble">
-                                        {full_response}
-                                        <div class="message-time assistant-time">{assistant_time}</div>
-                                    </div>
-                                </div>
-                                """, unsafe_allow_html=True)
-                                
-                                # 챗봇 응답에 다음 문제가 포함되어 있지 않으면 자동으로 다음 문제 제시
-                                if "다음 문제" not in full_response and "**문제:**" not in full_response:
-                                    # 랜덤으로 다음 문제 선택 (이전 문제와 다른 문제)
-                                    import random
-                                    available_questions = [q for q in st.session_state.quiz_questions_data 
-                                                          if not st.session_state.current_quiz_question or 
-                                                          q['문제'] != st.session_state.current_quiz_question.get('문제')]
-                                    if available_questions:
-                                        next_question = random.choice(available_questions)
-                                        st.session_state.current_quiz_question = next_question
-                                        
-                                        # 다음 문제 제시 메시지 추가
-                                        next_question_text = f"\n\n다음 문제예요! 😊\n\n**문제:** {next_question['문제']}\n\n아래 버튼 중에서 올바른 표현을 선택해주세요!"
-                                        next_time = datetime.now().strftime("%H:%M")
-                                        st.session_state.chat_messages.append({
-                                            "role": "assistant",
-                                            "content": next_question_text,
-                                            "timestamp": next_time,
-                                            "question_data": next_question
-                                        })
-                                        st.rerun()
-                            else:
-                                # 스트림에서 아무것도 반환되지 않은 경우
-                                st.error("앗, 응답을 생성하지 못했어. 다시 시도해줄래?")
-                                if st.session_state.chat_messages and st.session_state.chat_messages[-1]["role"] == "user":
-                                    st.session_state.chat_messages.pop()
-                        except Exception as e:
-                            error_message = f"스트리밍 중 오류가 발생했어요: {e}"
-                            st.error(error_message)
-                            # 실패한 경우, 마지막 사용자 메시지를 기록에서 제거하여 재시도할 수 있도록 함
-                            if st.session_state.chat_messages and st.session_state.chat_messages[-1]["role"] == "user":
-                                st.session_state.chat_messages.pop()
+    # 버튼 클릭으로 답변이 처리되므로 Gemini 응답 생성은 제거
+    # (버튼 클릭 시 즉시 피드백 제공)
