@@ -520,10 +520,6 @@ with st.container(border=True):
                     if is_correct:
                         st.session_state.answer_feedback = "correct"
                         st.session_state.answer_feedback_question_id = question_id
-                        # 정답일 때 1초 후 다음 문제로 이동
-                        st.session_state[f"auto_next_question_{question_id}"] = True
-                        st.session_state[f"auto_next_timer_{question_id}"] = time.time()
-                        st.session_state[f"auto_next_delay_{question_id}"] = 1.0  # 1초 딜레이
                     else:
                         st.session_state.answer_feedback = "incorrect"
                         st.session_state.answer_feedback_question_id = question_id
@@ -553,55 +549,35 @@ with st.container(border=True):
             
             if feedback_type == "correct":
                 st.success("🎉 정답입니다!")
-                # 정답일 때 빠르게 다음 문제로 넘어가기
-                auto_next_key = f"auto_next_question_{question_id}"
-                timer_key = f"auto_next_timer_{question_id}"
-                delay_key = f"auto_next_delay_{question_id}"
                 
-                # 타이머 초기화 (처음 정답을 맞췄을 때만)
-                if timer_key not in st.session_state:
-                    st.session_state[auto_next_key] = True
-                    st.session_state[timer_key] = time.time()
-                    st.session_state[delay_key] = 1.0  # 1초 딜레이
-                
-                # 타이머 체크 및 자동 진행
-                if auto_next_key in st.session_state and st.session_state[auto_next_key]:
-                    current_time = time.time()
-                    start_time = st.session_state.get(timer_key, current_time)
-                    elapsed = current_time - start_time
-                    delay = st.session_state.get(delay_key, 1.0)
-                    
-                    if elapsed >= delay:
-                        # 시간이 지나면 다음 문제로 이동 (1초 후)
-                        st.session_state[f"is_submitted_{question_id}"] = False
-                        st.session_state[f"submitted_answer_{question_id}"] = None
-                        st.session_state[auto_next_key] = False
-                        if timer_key in st.session_state:
-                            del st.session_state[timer_key]
-                        if delay_key in st.session_state:
-                            del st.session_state[delay_key]
-                        # last_rerun_key도 정리
-                        last_rerun_key = f"last_rerun_{question_id}"
-                        if last_rerun_key in st.session_state:
-                            del st.session_state[last_rerun_key]
-                        # 피드백 상태 초기화
-                        if 'answer_feedback' in st.session_state:
-                            del st.session_state['answer_feedback']
-                        if 'answer_feedback_question_id' in st.session_state:
-                            del st.session_state['answer_feedback_question_id']
-                        # 다음 랜덤 문제 생성
-                        generate_question()
-                        st.rerun()
-                    else:
-                        # 아직 시간이 안 지났으면 자동으로 다시 렌더링하여 타이머 업데이트
-                        # 무한 루프 방지를 위해 최소 간격 체크
-                        last_rerun_key = f"last_rerun_{question_id}"
-                        last_rerun_time = st.session_state.get(last_rerun_key, 0)
-                        current_time_for_rerun = time.time()
-                        # 0.2초 이상 지났을 때만 rerun (무한 루프 방지, 너무 빠른 rerun 방지)
-                        if current_time_for_rerun - last_rerun_time >= 0.2:
-                            st.session_state[last_rerun_key] = current_time_for_rerun
-                            st.rerun()
+                # 다음 문제 풀기 버튼
+                next_question_key = f"next_question_{question_id}"
+                if st.button("다음 문제 풀기", key=next_question_key, type="primary", use_container_width=True):
+                    # 상태 초기화
+                    st.session_state[f"is_submitted_{question_id}"] = False
+                    st.session_state[f"submitted_answer_{question_id}"] = None
+                    # 자동 진행 관련 상태 제거
+                    auto_next_key = f"auto_next_question_{question_id}"
+                    timer_key = f"auto_next_timer_{question_id}"
+                    delay_key = f"auto_next_delay_{question_id}"
+                    if auto_next_key in st.session_state:
+                        del st.session_state[auto_next_key]
+                    if timer_key in st.session_state:
+                        del st.session_state[timer_key]
+                    if delay_key in st.session_state:
+                        del st.session_state[delay_key]
+                    # last_rerun_key도 정리
+                    last_rerun_key = f"last_rerun_{question_id}"
+                    if last_rerun_key in st.session_state:
+                        del st.session_state[last_rerun_key]
+                    # 피드백 상태 초기화
+                    if 'answer_feedback' in st.session_state:
+                        del st.session_state['answer_feedback']
+                    if 'answer_feedback_question_id' in st.session_state:
+                        del st.session_state['answer_feedback_question_id']
+                    # 다음 랜덤 문제 생성
+                    generate_question()
+                    st.rerun()
             elif feedback_type == "incorrect":
                 st.error(f"❌ 아쉬워요, 정답은 **'{question_data['정답']}'** 입니다.")
                 if submitted_answer:
