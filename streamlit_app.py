@@ -361,10 +361,6 @@ if 'grammar_df' not in st.session_state:
         st.session_state.incorrect_questions = []
     if 'current_question' not in st.session_state:
         st.session_state.current_question = None
-    if 'retry_mode' not in st.session_state:
-        st.session_state.retry_mode = False
-    if 'current_retry_index' not in st.session_state:
-        st.session_state.current_retry_index = 0
 
 # --- 2. 문법 오류 차트 ---
 st.markdown("---")
@@ -412,30 +408,15 @@ for idx, row in st.session_state.grammar_df.iterrows():
 st.markdown("---")
 st.subheader("📝 도전! 문법 퀴즈")
 
-def generate_question(retry=False):
-    """퀴즈 문제를 생성합니다. retry 모드에서는 오답 목록에서 문제를 가져옵니다."""
-    if retry:
-        # 오답 목록에서 None이 아닌 다음 문제를 찾음
-        while st.session_state.current_retry_index < len(st.session_state.incorrect_questions) and st.session_state.incorrect_questions[st.session_state.current_retry_index] is None:
-            st.session_state.current_retry_index += 1
-
-        if st.session_state.current_retry_index < len(st.session_state.incorrect_questions):
-            question = st.session_state.incorrect_questions[st.session_state.current_retry_index]
-            st.session_state.current_question = question
-        else: # 모든 오답 문제를 다 푼 경우
-            st.success("🎉 축하합니다! 모든 오답을 정복했어요!")
-            st.session_state.retry_mode = False
-            st.session_state.current_question = None
-            st.session_state.current_retry_index = 0
-            st.session_state.incorrect_questions = [] # 오답 목록 초기화
-    else:
-        # 일반 퀴즈 모드: 퀴즈 데이터에서 문제 샘플링
-        quiz_question_series = st.session_state.quiz_df.sample(1).iloc[0]
-        rule_info_series = st.session_state.grammar_df[st.session_state.grammar_df['오류 유형'] == quiz_question_series['오류 유형']].iloc[0]
-        
-        question_data = quiz_question_series.to_dict()
-        question_data['규칙 설명'] = rule_info_series['규칙 설명']
-        st.session_state.current_question = question_data
+def generate_question():
+    """랜덤 퀴즈 문제를 생성합니다."""
+    # 퀴즈 데이터에서 랜덤으로 문제 샘플링
+    quiz_question_series = st.session_state.quiz_df.sample(1).iloc[0]
+    rule_info_series = st.session_state.grammar_df[st.session_state.grammar_df['오류 유형'] == quiz_question_series['오류 유형']].iloc[0]
+    
+    question_data = quiz_question_series.to_dict()
+    question_data['규칙 설명'] = rule_info_series['규칙 설명']
+    st.session_state.current_question = question_data
 
 # 퀴즈 모드에 따라 제목 변경
 quiz_title = "오답 다시 풀어보기" if st.session_state.retry_mode else "나의 문법 실력 최종 점검! (퀴즈)"
@@ -444,14 +425,7 @@ with st.container(border=True):
     st.write("문법에 자신감이 생길때까지 '새로운 문제 퀴즈' 풀기 버튼을 눌러 학습해봅시다! 버튼을 누르면 문제가 랜덤으로 나와요!")
 
     if st.button("🎲 새로운 퀴즈 풀기!", use_container_width=True):
-        # 오답 모드가 아니거나, 오답이 없을 때만 일반 퀴즈 시작
-        if not any(q is not None for q in st.session_state.incorrect_questions):
-            st.session_state.retry_mode = False
-
-        if st.session_state.retry_mode:
-            st.session_state.current_retry_index += 1
-
-        generate_question(st.session_state.retry_mode)
+        generate_question()
         # 이전 답변 결과 메시지 초기화
         if 'answer_feedback' in st.session_state:
             del st.session_state.answer_feedback
@@ -527,9 +501,7 @@ with st.container(border=True):
                     if is_correct:
                         st.session_state.answer_feedback = "correct"
                         st.session_state.answer_feedback_question_id = question_id
-                        if st.session_state.retry_mode:
-                            st.session_state.incorrect_questions[st.session_state.current_retry_index] = None
-                        # 정답일 때 풍선 표시 후 빠르게 다음 문제로 이동 (1초 후)
+                        # 정답일 때 1초 후 다음 문제로 이동
                         st.session_state[f"auto_next_question_{question_id}"] = True
                         st.session_state[f"auto_next_timer_{question_id}"] = time.time()
                         st.session_state[f"auto_next_delay_{question_id}"] = 1.0  # 1초 딜레이
@@ -540,12 +512,11 @@ with st.container(border=True):
                         st.session_state.quiz_history.append(question_data['오류 유형'])
                         # 중복되지 않게 오답 목록에 추가
                         is_duplicate = any(
-                            q is not None and 
                             q.get('문제') == question_data.get('문제') 
                             for q in st.session_state.incorrect_questions
                         )
-                        if not is_duplicate and not st.session_state.retry_mode:
-                            # 오답 문제를 복사해서 저장 (원본 데이터 보존)
+                        if not is_duplicate:
+                            # 오답 문제를 복사해서 저장
                             incorrect_q = question_data.copy()
                             incorrect_q['user_wrong_answer'] = user_answer
                             st.session_state.incorrect_questions.append(incorrect_q)
@@ -599,11 +570,8 @@ with st.container(border=True):
                             del st.session_state['answer_feedback']
                         if 'answer_feedback_question_id' in st.session_state:
                             del st.session_state['answer_feedback_question_id']
-                        # 다음 랜덤 문제 생성 (retry 모드가 아닐 때만)
-                        if not st.session_state.retry_mode:
-                            generate_question(retry=False)
-                        else:
-                            generate_question(retry=True)
+                        # 다음 랜덤 문제 생성
+                        generate_question()
                         st.rerun()
                     else:
                         # 아직 시간이 안 지났으면 자동으로 다시 렌더링하여 타이머 업데이트
@@ -624,8 +592,8 @@ with st.container(border=True):
                 confirm_key = f"confirm_incorrect_{question_id}"
                 show_explanation = st.session_state.get(f"show_explanation_{question_id}", True)
                 
-                if st.button("문제 이어서 풀기", key=confirm_key, type="primary", use_container_width=True):
-                    # 버튼을 누르면 다음 문제로 이동
+                if st.button("이어서 문제 풀기", key=confirm_key, type="primary", use_container_width=True):
+                    # 버튼을 누르면 규칙 제시 부분 없애고 다음 문제로 이동
                     st.session_state[f"is_submitted_{question_id}"] = False
                     st.session_state[f"submitted_answer_{question_id}"] = None
                     st.session_state[f"show_explanation_{question_id}"] = False
@@ -644,10 +612,10 @@ with st.container(border=True):
                         del st.session_state['answer_feedback']
                     if 'answer_feedback_question_id' in st.session_state:
                         del st.session_state['answer_feedback_question_id']
-                    generate_question(st.session_state.retry_mode)
+                    generate_question()
                     st.rerun()
                 
-                # 오답 설명 섹션 (버튼 아래에 배치)
+                # 오답 설명 섹션 (버튼 아래에 배치, 버튼 누르면 사라짐)
                 if show_explanation:
                     st.markdown("---")
                     with st.container(border=True):
@@ -680,52 +648,44 @@ with st.container(border=True):
                             st.markdown("---")
                             st.markdown("**📚 기억하기:** 이 규칙을 다시 한번 확인하고 다음 문제에 적용해보세요!")
 
-# --- 6. 오답 유형 분석 및 추천 ---
-# 오답이 있으면 약점 분석 표시
-if st.session_state.quiz_history:
-    st.markdown("---")
-    st.subheader("📈 나의 약점 분석!")
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        with st.container(border=True):
-            st.markdown("##### 📊 오답 유형 분포")
-            incorrect_df = pd.DataFrame(st.session_state.quiz_history, columns=['오류 유형'])
-            chart_data = incorrect_df['오류 유형'].value_counts()
-            st.bar_chart(chart_data, color="#FF4B4B")
-
-    with col2:
-        with st.container(border=True):
-            st.markdown("##### 💡 가장 많이 틀린 유형 다시보기")
-            if not chart_data.empty:
-                most_common_error = chart_data.index[0]
-                st.warning(f"**'{most_common_error}'** 유형을 가장 많이 틀렸어요. 아래 규칙을 다시 한번 확인해 보세요!")
-
-                # 해당 규칙 정보 가져오기
-                rule_info = st.session_state.grammar_df[st.session_state.grammar_df['오류 유형'] == most_common_error].iloc[0]
-                with st.container(border=True):
-                    st.info(f"**규칙:** {rule_info['규칙 설명']}")
-                    st.success(f"**올바른 예시:** {rule_info['예시 (맞는 문장)']}")
-                    st.error(f"**틀린 예시:** {rule_info['예시 (틀린 문장)']}")
-            else:
-                st.write("아직 기록된 오답이 없습니다.")
-
-# --- 7. 오답 노트 및 다시 풀기 기능 ---
-# 오답 노트는 항상 표시 (오답이 있을 때만)
-incorrect_count = sum(1 for q in st.session_state.get('incorrect_questions', []) if q is not None)
+# --- 6. 나만의 오답 노트 ---
+# 오답이 있으면 오답 노트 표시
+incorrect_count = len(st.session_state.get('incorrect_questions', []))
 if incorrect_count > 0:
     st.markdown("---")
     st.subheader("📓 나만의 비밀 오답 노트")
 
     with st.container(border=True):
-        st.write(f"퀴즈에서 틀렸던 문제 **{incorrect_count}개**가 있어요. '오답 정복하기' 버튼을 눌러 다시 풀어봐요!")
-
-        # 오답 목록을 더 자세하게 표시
+        st.write(f"틀렸던 문제 **{incorrect_count}개**")
+        
+        # 오답 유형 분석 그래프 (약점 분석 통합)
+        if st.session_state.quiz_history:
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                with st.container(border=True):
+                    st.markdown("##### 📊 오답 유형 분포")
+                    incorrect_df = pd.DataFrame(st.session_state.quiz_history, columns=['오류 유형'])
+                    chart_data = incorrect_df['오류 유형'].value_counts()
+                    st.bar_chart(chart_data, color="#FF4B4B")
+            
+            with col2:
+                with st.container(border=True):
+                    st.markdown("##### 💡 가장 많이 틀린 유형")
+                    if not chart_data.empty:
+                        most_common_error = chart_data.index[0]
+                        st.warning(f"**'{most_common_error}'** 유형을 가장 많이 틀렸어요!")
+                        
+                        # 해당 규칙 정보 가져오기
+                        rule_info = st.session_state.grammar_df[st.session_state.grammar_df['오류 유형'] == most_common_error].iloc[0]
+                        with st.container(border=True):
+                            st.info(f"**규칙:** {rule_info['규칙 설명']}")
+                            st.success(f"**올바른 예시:** {rule_info['예시 (맞는 문장)']}")
+                            st.error(f"**틀린 예시:** {rule_info['예시 (틀린 문장)']}")
+        
+        # 오답 목록
         with st.expander(f"📋 오답 목록 보기 ({incorrect_count}개)", expanded=False):
             for i, q in enumerate(st.session_state.incorrect_questions):
-                if q is None: # 이미 맞힌 문제는 건너뛰기
-                    continue
                 with st.container(border=True):
                     st.markdown(f"**{i+1}. [{q['오류 유형']}]** {q['문제']}")
                     st.write(f"**정답:** {q['정답']}")
@@ -733,35 +693,14 @@ if incorrect_count > 0:
                         st.write(f"**내가 선택한 답:** ~~{q['user_wrong_answer']}~~ ❌")
                     st.caption(f"규칙: {q.get('규칙 설명', '')[:50]}...")
 
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("✍️ 오답 정복하기!", type="primary", use_container_width=True):
-                st.session_state.retry_mode = True
-                st.session_state.current_retry_index = 0
-                # 첫 번째 오답 문제로 이동
-                while (st.session_state.current_retry_index < len(st.session_state.incorrect_questions) and 
-                       st.session_state.incorrect_questions[st.session_state.current_retry_index] is None):
-                    st.session_state.current_retry_index += 1
-                generate_question(retry=True)
-            # 피드백 초기화 및 페이지 새로고침
+        if st.button("🗑️ 오답 노트 초기화", use_container_width=True):
+            st.session_state.incorrect_questions = []
+            st.session_state.quiz_history = []
+            st.session_state.current_question = None
             if 'answer_feedback' in st.session_state:
-                del st.session_state.answer_feedback
+                del st.session_state['answer_feedback']
+            st.success("오답 노트가 초기화되었습니다!")
             st.rerun()
-        
-        with col2:
-            if st.button("🗑️ 오답 노트 초기화", use_container_width=True):
-                st.session_state.incorrect_questions = []
-                st.session_state.quiz_history = []
-                st.session_state.retry_mode = False
-                st.session_state.current_retry_index = 0
-                st.session_state.current_question = None
-                if 'answer_feedback' in st.session_state:
-                    del st.session_state.answer_feedback
-                st.success("오답 노트가 초기화되었습니다!")
-                st.rerun()
-
-        if st.session_state.retry_mode:
-            st.info("💡 오답 퀴즈 모드가 활성화되었습니다. 상단의 퀴즈 섹션에서 문제를 풀어주세요.")
 
 # --- 3. (구) -> (신) 꼼꼼히 확인하고 레벨 업! (위치 이동 및 기능 변경) ---
 st.markdown("---")
