@@ -106,12 +106,12 @@ try:
 
         # 모든 경로에서 찾지 못한 경우 기본 로드 시도
         if not loaded:
-load_dotenv()
+            load_dotenv()
         
         GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 except:
     # 폴백: 환경 변수에서 직접 가져오기
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+    GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
 # --- 챗봇 관련 함수들 ---
 def get_available_models():
@@ -370,14 +370,14 @@ st.subheader("📊 친구들이 가장 많이 헷갈려요!")
 st.write("어떤 문법을 가장 많이 틀리는지 차트로 확인하고, 중요한 규칙부터 공부해 보세요.")
 
 # 오류 빈도 차트
-    chart_data = st.session_state.grammar_df.sort_values(by='빈도 (가상)', ascending=False)
-    st.bar_chart(
-        chart_data,
-        x='오류 유형',
-        y='빈도 (가상)',
-        color='#FF4B4B',
-        height=300
-    )
+chart_data = st.session_state.grammar_df.sort_values(by='빈도 (가상)', ascending=False)
+st.bar_chart(
+    chart_data,
+    x='오류 유형',
+    y='빈도 (가상)',
+    color='#FF4B4B',
+    height=300
+)
 
 # --- 2-1. 규칙 전체 보기 (개선된 가독성) ---
 st.markdown("---")
@@ -422,11 +422,11 @@ def generate_question():
     
     # 퀴즈 데이터에서 랜덤으로 문제 샘플링
     quiz_question_series = filtered_quiz_df.sample(1).iloc[0]
-        rule_info_series = st.session_state.grammar_df[st.session_state.grammar_df['오류 유형'] == quiz_question_series['오류 유형']].iloc[0]
-        
-        question_data = quiz_question_series.to_dict()
-        question_data['규칙 설명'] = rule_info_series['규칙 설명']
-        st.session_state.current_question = question_data
+    rule_info_series = st.session_state.grammar_df[st.session_state.grammar_df['오류 유형'] == quiz_question_series['오류 유형']].iloc[0]
+    
+    question_data = quiz_question_series.to_dict()
+    question_data['규칙 설명'] = rule_info_series['규칙 설명']
+    st.session_state.current_question = question_data
 
 def generate_question_from_incorrect():
     """틀린 문제 목록에서 랜덤으로 문제를 생성합니다."""
@@ -481,8 +481,8 @@ with st.container(border=True):
         # 선택지 생성 및 섞기 (매번 동일하게 섞이도록 시드 고정)
         question_id = hash(question_data['문제'])
         random.seed(question_id)
-            options = question_data['오답들'] + [question_data['정답']]
-            random.shuffle(options)
+        options = question_data['오답들'] + [question_data['정답']]
+        random.shuffle(options)
             
         # 폼 키를 문제별로 고유하게 생성
         form_key = f"quiz_form_{question_id}"
@@ -581,7 +581,7 @@ with st.container(border=True):
                     if last_rerun_key in st.session_state:
                         del st.session_state[last_rerun_key]
                     # 피드백 상태 초기화
-        if 'answer_feedback' in st.session_state:
+                    if 'answer_feedback' in st.session_state:
                         del st.session_state['answer_feedback']
                     if 'answer_feedback_question_id' in st.session_state:
                         del st.session_state['answer_feedback_question_id']
@@ -598,7 +598,7 @@ with st.container(border=True):
                 show_explanation = st.session_state.get(f"show_explanation_{question_id}", True)
                 
                 if show_explanation:
-    st.markdown("---")
+                    st.markdown("---")
                     with st.container(border=True):
                         st.markdown("##### 🔍 왜 틀렸을까요?")
                         st.markdown(f"**💡 {question_data['오류 유형']} 규칙**")
@@ -684,34 +684,34 @@ if incorrect_count > 0:
         
         # 오답 유형 분석 그래프 (약점 분석 통합)
         if st.session_state.quiz_history:
-    col1, col2 = st.columns(2)
+            col1, col2 = st.columns(2)
 
-    with col1:
-        with st.container(border=True):
-            st.markdown("##### 📊 오답 유형 분포")
-            incorrect_df = pd.DataFrame(st.session_state.quiz_history, columns=['오류 유형'])
-            chart_data = incorrect_df['오류 유형'].value_counts()
-            st.bar_chart(chart_data, color="#FF4B4B")
+            with col1:
+                with st.container(border=True):
+                    st.markdown("##### 📊 오답 유형 분포")
+                    incorrect_df = pd.DataFrame(st.session_state.quiz_history, columns=['오류 유형'])
+                    chart_data = incorrect_df['오류 유형'].value_counts()
+                    st.bar_chart(chart_data, color="#FF4B4B")
 
-    with col2:
-        with st.container(border=True):
+            with col2:
+                with st.container(border=True):
                     st.markdown("##### 💡 가장 많이 틀린 유형")
-            if not chart_data.empty:
-                most_common_error = chart_data.index[0]
+                    if not chart_data.empty:
+                        most_common_error = chart_data.index[0]
                         st.warning(f"**'{most_common_error}'** 유형을 가장 많이 틀렸어요!")
 
-                # 해당 규칙 정보 가져오기
-                rule_info = st.session_state.grammar_df[st.session_state.grammar_df['오류 유형'] == most_common_error].iloc[0]
+                        # 해당 규칙 정보 가져오기
+                        rule_info = st.session_state.grammar_df[st.session_state.grammar_df['오류 유형'] == most_common_error].iloc[0]
                         with st.container(border=True):
-                st.info(f"**규칙:** {rule_info['규칙 설명']}")
+                            st.info(f"**규칙:** {rule_info['규칙 설명']}")
                             st.success(f"**올바른 예시:** {rule_info['예시 (맞는 문장)']}")
                             st.error(f"**틀린 예시:** {rule_info['예시 (틀린 문장)']}")
 
         # 오답 목록
         with st.expander(f"📋 오답 목록 보기 ({incorrect_count}개)", expanded=False):
-        for i, q in enumerate(st.session_state.incorrect_questions):
+            for i, q in enumerate(st.session_state.incorrect_questions):
                 with st.container(border=True):
-            st.markdown(f"**{i+1}. [{q['오류 유형']}]** {q['문제']}")
+                    st.markdown(f"**{i+1}. [{q['오류 유형']}]** {q['문제']}")
                     st.write(f"**정답:** {q['정답']}")
                     if 'user_wrong_answer' in q:
                         st.write(f"**내가 선택한 답:** ~~{q['user_wrong_answer']}~~ ❌")
