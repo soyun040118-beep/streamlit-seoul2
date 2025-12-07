@@ -1066,9 +1066,15 @@ else:
             wrong_answer = None
             
             # 1. 먼저 문제 데이터에 있는 오답 사용 (현재 문제의 틀린 문장 예시)
+            wrong_answer = None
             if len(wrong_answers) > 0:
                 wrong_answer = wrong_answers[0]
-            else:
+                # 오답이 정답과 같으면 자동 생성 로직으로 넘어감
+                if wrong_answer == correct_answer:
+                    wrong_answer = None
+            
+            # 오답이 없거나 정답과 같으면 자동 생성
+            if wrong_answer is None or wrong_answer == correct_answer:
                 # 2. 문제 데이터에 오답이 없으면 정답을 변형해서 현재 문제와 관련된 틀린 문장 생성
                 # 문제 텍스트에서 [선택지] 부분을 찾아서 반대 선택지로 변형
                 problem_text = current_question_data['문제']
@@ -1081,10 +1087,69 @@ else:
                     elif '예요' in correct_text:
                         wrong_answer = correct_text.replace('예요', '이에요')
                 elif '[데/대]' in problem_text or '[대/데]' in problem_text:
-                    if '데' in correct_text:
-                        wrong_answer = correct_text.replace('데', '대')
-                    elif '대' in correct_text:
-                        wrong_answer = correct_text.replace('대', '데')
+                    # 문제 텍스트에서 [데/대] 앞의 텍스트를 찾아서 해당 위치만 변형
+                    import re
+                    # 문제에서 [데/대] 패턴 찾기
+                    pattern_match = re.search(r'\[데/대\]|\[대/데\]', problem_text)
+                    if pattern_match:
+                        # 문제에서 [데/대] 앞의 텍스트 추출 (예: '맛있')
+                        before_pattern = problem_text[:pattern_match.start()].strip()
+                        # 정답에서 해당 텍스트 다음에 나오는 첫 번째 '대' 또는 '데' 찾기
+                        if before_pattern in correct_text:
+                            before_idx = correct_text.find(before_pattern)
+                            if before_idx != -1:
+                                # '맛있' 다음부터 검색
+                                search_start = before_idx + len(before_pattern)
+                                # '대' 또는 '데' 찾기
+                                dae_idx = correct_text.find('대', search_start)
+                                de_idx = correct_text.find('데', search_start)
+                                
+                                # 더 가까운 것을 선택 (둘 다 있으면 더 가까운 것)
+                                if dae_idx != -1 and de_idx != -1:
+                                    target_idx = min(dae_idx, de_idx)
+                                    target_char = '대' if dae_idx < de_idx else '데'
+                                elif dae_idx != -1:
+                                    target_idx = dae_idx
+                                    target_char = '대'
+                                elif de_idx != -1:
+                                    target_idx = de_idx
+                                    target_char = '데'
+                                else:
+                                    target_idx = -1
+                                    target_char = None
+                                
+                                if target_idx != -1:
+                                    # 해당 위치의 문자만 변환
+                                    if target_char == '대':
+                                        wrong_answer = correct_text[:target_idx] + '데' + correct_text[target_idx + 1:]
+                                    elif target_char == '데':
+                                        wrong_answer = correct_text[:target_idx] + '대' + correct_text[target_idx + 1:]
+                    
+                    # 위 방법이 실패하면 마지막에 나오는 '대' 또는 '데'만 변환
+                    if wrong_answer is None or wrong_answer == correct_answer:
+                        # 정답에서 마지막에 나오는 '대' 또는 '데'만 변환
+                        if correct_text.endswith('대.'):
+                            wrong_answer = correct_text[:-2] + '데.'
+                        elif correct_text.endswith('대요?'):
+                            wrong_answer = correct_text[:-4] + '데요?'
+                        elif correct_text.endswith('대요'):
+                            wrong_answer = correct_text[:-3] + '데요'
+                        elif correct_text.endswith('데.'):
+                            wrong_answer = correct_text[:-2] + '대.'
+                        elif correct_text.endswith('데요?'):
+                            wrong_answer = correct_text[:-4] + '대요?'
+                        elif correct_text.endswith('데요'):
+                            wrong_answer = correct_text[:-3] + '대요'
+                        elif '대' in correct_text:
+                            # 마지막 '대'만 '데'로 변환
+                            last_dae_idx = correct_text.rfind('대')
+                            if last_dae_idx != -1:
+                                wrong_answer = correct_text[:last_dae_idx] + '데' + correct_text[last_dae_idx + 1:]
+                        elif '데' in correct_text:
+                            # 마지막 '데'만 '대'로 변환
+                            last_de_idx = correct_text.rfind('데')
+                            if last_de_idx != -1:
+                                wrong_answer = correct_text[:last_de_idx] + '대' + correct_text[last_de_idx + 1:]
                 elif '[어떡해/어떻게]' in problem_text or '[어떻게/어떡해]' in problem_text:
                     if '어떻게' in correct_text:
                         wrong_answer = correct_text.replace('어떻게', '어떡해')
