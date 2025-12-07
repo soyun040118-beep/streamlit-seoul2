@@ -962,82 +962,56 @@ else:
             else:
                 # 챗봇 메시지 (왼쪽)
                 typing_effect = message.get("typing_effect", False)
-                message_id = f"msg_{idx}"
+                message_key = f"typing_msg_{idx}"
                 
                 if typing_effect:
-                    # 타자 효과가 있는 메시지
-                    st.markdown(f"""
-                    <div class="assistant-message">
-                        <div class="assistant-bubble" id="{message_id}">
-                            <span id="{message_id}_text"></span>
-                            <span id="{message_id}_cursor" style="display: inline-block; width: 2px; height: 1em; background-color: #333; animation: blink 1s infinite;"></span>
-                            <div class="message-time assistant-time">{timestamp}</div>
+                    # 타자 효과가 있는 메시지 - Python 기반 점진적 표시
+                    if message_key not in st.session_state:
+                        st.session_state[message_key] = 0
+                    
+                    displayed_length = st.session_state[message_key]
+                    full_text = content
+                    
+                    # 아직 전체 텍스트가 표시되지 않았으면 점진적으로 추가
+                    if displayed_length < len(full_text):
+                        # 한 번에 여러 글자씩 표시 (더 빠르게)
+                        chars_per_update = 5  # 한 번에 5글자씩 (더 빠르게)
+                        new_length = min(displayed_length + chars_per_update, len(full_text))
+                        st.session_state[message_key] = new_length
+                        displayed_text = full_text[:new_length]
+                        
+                        # 커서 표시 (깜빡이는 효과)
+                        cursor_html = '<span style="animation: blink 1s infinite;">|</span>' if new_length < len(full_text) else ""
+                        
+                        st.markdown(f"""
+                        <div class="assistant-message">
+                            <div class="assistant-bubble">
+                                {displayed_text}{cursor_html}
+                                <div class="message-time assistant-time">{timestamp}</div>
+                            </div>
                         </div>
-                    </div>
-                    <script>
-                        (function() {{
-                            var text = {json.dumps(content)};
-                            var element = document.getElementById('{message_id}_text');
-                            var cursor = document.getElementById('{message_id}_cursor');
-                            if (element && !element.dataset.typed) {{
-                                element.dataset.typed = 'true';
-                                var i = 0;
-                                var inBold = false;
-                                function typeChar() {{
-                                    if (i < text.length) {{
-                                        var char = text[i];
-                                        var nextChar = i + 1 < text.length ? text[i + 1] : '';
-                                        
-                                        // 마크다운 형식 처리
-                                        if (char === '\\n') {{
-                                            element.innerHTML += '<br>';
-                                            i++;
-                                        }} else if (char === '*' && nextChar === '*') {{
-                                            // **로 감싸진 텍스트는 <strong> 태그로 변환
-                                            if (!inBold) {{
-                                                element.innerHTML += '<strong>';
-                                                inBold = true;
-                                            }} else {{
-                                                element.innerHTML += '</strong>';
-                                                inBold = false;
-                                            }}
-                                            i += 2; // ** 두 글자 건너뛰기
-                                        }} else {{
-                                            // HTML 특수 문자 이스케이프
-                                            if (char === '<') {{
-                                                element.innerHTML += '&lt;';
-                                            }} else if (char === '>') {{
-                                                element.innerHTML += '&gt;';
-                                            }} else if (char === '&') {{
-                                                element.innerHTML += '&amp;';
-                                            }} else {{
-                                                element.innerHTML += char;
-                                            }}
-                                            i++;
-                                        }}
-                                        setTimeout(typeChar, 30); // 30ms마다 한 글자씩
-                                    }} else {{
-                                        // 타이핑 완료 후 커서 제거
-                                        if (cursor) cursor.style.display = 'none';
-                                    }}
-                                }}
-                                typeChar();
-                            }} else if (element) {{
-                                // 이미 타이핑이 완료된 경우 전체 텍스트 표시 (마크다운 변환)
-                                var htmlText = text.replace(/\\n/g, '<br>')
-                                                    .replace(/\\*\\*(.*?)\\*\\*/g, '<strong>$1</strong>');
-                                element.innerHTML = htmlText;
-                                if (cursor) cursor.style.display = 'none';
+                        <style>
+                            @keyframes blink {{
+                                0%, 50% {{ opacity: 1; }}
+                                51%, 100% {{ opacity: 0; }}
                             }}
-                        }})();
-                    </script>
-                    <style>
-                        @keyframes blink {{
-                            0%, 50% {{ opacity: 1; }}
-                            51%, 100% {{ opacity: 0; }}
-                        }}
-                    </style>
-                    """, unsafe_allow_html=True)
+                        </style>
+                        """, unsafe_allow_html=True)
+                        
+                        # 아직 타이핑 중이면 짧은 대기 후 rerun
+                        if new_length < len(full_text):
+                            time.sleep(0.03)  # 30ms 대기 (더 빠르게)
+                            st.rerun()
+                    else:
+                        # 타이핑 완료 - 전체 텍스트 표시
+                        st.markdown(f"""
+                        <div class="assistant-message">
+                            <div class="assistant-bubble">
+                                {full_text}
+                                <div class="message-time assistant-time">{timestamp}</div>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
                 else:
                     # 일반 메시지 (타자 효과 없음)
                     st.markdown(f"""
