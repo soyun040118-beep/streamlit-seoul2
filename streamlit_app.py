@@ -961,14 +961,93 @@ else:
                 """, unsafe_allow_html=True)
             else:
                 # 챗봇 메시지 (왼쪽)
-                st.markdown(f"""
-                <div class="assistant-message">
-                    <div class="assistant-bubble">
-                        {content}
-                        <div class="message-time assistant-time">{timestamp}</div>
+                typing_effect = message.get("typing_effect", False)
+                message_id = f"msg_{idx}"
+                
+                if typing_effect:
+                    # 타자 효과가 있는 메시지
+                    st.markdown(f"""
+                    <div class="assistant-message">
+                        <div class="assistant-bubble" id="{message_id}">
+                            <span id="{message_id}_text"></span>
+                            <span id="{message_id}_cursor" style="display: inline-block; width: 2px; height: 1em; background-color: #333; animation: blink 1s infinite;"></span>
+                            <div class="message-time assistant-time">{timestamp}</div>
+                        </div>
                     </div>
-                </div>
-                """, unsafe_allow_html=True)
+                    <script>
+                        (function() {{
+                            var text = {json.dumps(content)};
+                            var element = document.getElementById('{message_id}_text');
+                            var cursor = document.getElementById('{message_id}_cursor');
+                            if (element && !element.dataset.typed) {{
+                                element.dataset.typed = 'true';
+                                var i = 0;
+                                var inBold = false;
+                                function typeChar() {{
+                                    if (i < text.length) {{
+                                        var char = text[i];
+                                        var nextChar = i + 1 < text.length ? text[i + 1] : '';
+                                        
+                                        // 마크다운 형식 처리
+                                        if (char === '\\n') {{
+                                            element.innerHTML += '<br>';
+                                            i++;
+                                        }} else if (char === '*' && nextChar === '*') {{
+                                            // **로 감싸진 텍스트는 <strong> 태그로 변환
+                                            if (!inBold) {{
+                                                element.innerHTML += '<strong>';
+                                                inBold = true;
+                                            }} else {{
+                                                element.innerHTML += '</strong>';
+                                                inBold = false;
+                                            }}
+                                            i += 2; // ** 두 글자 건너뛰기
+                                        }} else {{
+                                            // HTML 특수 문자 이스케이프
+                                            if (char === '<') {{
+                                                element.innerHTML += '&lt;';
+                                            }} else if (char === '>') {{
+                                                element.innerHTML += '&gt;';
+                                            }} else if (char === '&') {{
+                                                element.innerHTML += '&amp;';
+                                            }} else {{
+                                                element.innerHTML += char;
+                                            }}
+                                            i++;
+                                        }}
+                                        setTimeout(typeChar, 30); // 30ms마다 한 글자씩
+                                    }} else {{
+                                        // 타이핑 완료 후 커서 제거
+                                        if (cursor) cursor.style.display = 'none';
+                                    }}
+                                }}
+                                typeChar();
+                            }} else if (element) {{
+                                // 이미 타이핑이 완료된 경우 전체 텍스트 표시 (마크다운 변환)
+                                var htmlText = text.replace(/\\n/g, '<br>')
+                                                    .replace(/\\*\\*(.*?)\\*\\*/g, '<strong>$1</strong>');
+                                element.innerHTML = htmlText;
+                                if (cursor) cursor.style.display = 'none';
+                            }}
+                        }})();
+                    </script>
+                    <style>
+                        @keyframes blink {{
+                            0%, 50% {{ opacity: 1; }}
+                            51%, 100% {{ opacity: 0; }}
+                        }}
+                    </style>
+                    """, unsafe_allow_html=True)
+                else:
+                    # 일반 메시지 (타자 효과 없음)
+                    st.markdown(f"""
+                    <div class="assistant-message">
+                        <div class="assistant-bubble">
+                            {content}
+                            <div class="message-time assistant-time">{timestamp}</div>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
     
     # 문법 유형 선택이 안 되어 있으면 선택 버튼 표시
     if st.session_state.selected_grammar_type is None:
@@ -1036,7 +1115,8 @@ else:
                 "role": "assistant",
                 "content": question_text,
                 "timestamp": current_time,
-                "question_data": current_question
+                "question_data": current_question,
+                "typing_effect": True  # 타자 효과 플래그
             })
             st.rerun()
     
@@ -1283,7 +1363,8 @@ else:
                             "role": "assistant",
                             "content": next_question_text,
                             "timestamp": next_time,
-                            "question_data": next_question
+                            "question_data": next_question,
+                            "typing_effect": True  # 타자 효과 플래그
                         })
                     st.rerun()
                 else:
@@ -1350,7 +1431,8 @@ else:
                         "role": "assistant",
                         "content": response_text,
                         "timestamp": response_time,
-                        "question_data": new_question
+                        "question_data": new_question,
+                        "typing_effect": True  # 타자 효과 플래그
                     })
                 st.rerun()
             
